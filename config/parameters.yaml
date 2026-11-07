@@ -1,4 +1,4 @@
-# SickleSupply model parameters.
+# SickleSignal model parameters.
 #
 # Every parameter has:
 #   kind:     SOURCED (from a cited source) or ASSUMPTION (team placeholder, adjustable in the UI)

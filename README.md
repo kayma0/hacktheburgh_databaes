@@ -1,7 +1,7 @@
-# SickleSupply
+# SickleSignal
 
 **For charity programme staff running voluntary blood-donation drives.** In sub-Saharan Africa many children with sickle
-cell disease (SCD) are undiagnosed and blood is scarce. SickleSupply answers three questions, with honest uncertainty:
+cell disease (SCD) are undiagnosed and blood is scarce. SickleSignal answers three questions, with honest uncertainty:
 
 1. **Where** is the modelled paediatric SCD blood shortfall largest?
 2. **How many** donors and drives would cover a chosen share of it?

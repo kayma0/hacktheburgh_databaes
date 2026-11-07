@@ -21,7 +21,7 @@ class Settings:
     params_path: Path = field(default_factory=lambda: Path(_env("PARAMS_PATH", "")) if _env("PARAMS_PATH") else (
         ROOT / "data" / "raw" / "parameters.yaml" if (ROOT / "data" / "raw" / "parameters.yaml").exists()
         else ROOT / "config" / "parameters.yaml"))
-    database_url: str = field(default_factory=lambda: _env("DATABASE_URL", f"sqlite:///{ROOT / 'sicklesupply.db'}"))
+    database_url: str = field(default_factory=lambda: _env("DATABASE_URL", f"sqlite:///{ROOT / 'sicklesignal.db'}"))
     gemini_api_key: str | None = field(default_factory=lambda: _env("GEMINI_API_KEY"))
     gemini_model: str | None = field(default_factory=lambda: _env("GEMINI_MODEL"))
     gemini_timeout_s: float = field(default_factory=lambda: float(_env("GEMINI_TIMEOUT_S", "45")))

@@ -56,7 +56,7 @@ class AppState:
             self.ds = build_dataset(settings)
         except (DataFileError, P.ParameterError) as e:
             self.error = str(e)
-            print("\n[SickleSupply] DATA NOT LOADED\n" + self.error + "\n")
+            print("\n[SickleSignal] DATA NOT LOADED\n" + self.error + "\n")
 
     # ---------------------------------------------------------------- helpers
     def require(self) -> tuple[Dataset, dict]:

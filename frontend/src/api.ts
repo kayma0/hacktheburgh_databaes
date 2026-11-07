@@ -1,4 +1,4 @@
-// Typed client for the SickleSupply API.
+// Typed client for the SickleSignal API.
 
 export type Q = { p10: number; p50: number; p90: number };
 export type Overrides = Record<string, Record<string, number>>;

@@ -34,7 +34,7 @@ function Shell() {
     <div className="mx-auto max-w-7xl p-4">
       <header className="no-print mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-brand-700">SickleSupply</h1>
+          <h1 className="text-2xl font-bold text-brand-700">SickleSignal</h1>
           <p className="text-sm text-stone-600">
             Where is the modelled blood shortfall for children with sickle cell disease largest, and how many voluntary donors would close it?{" "}
             <Badge kind="MODELLED" title="All estimates are modelled, not observed" />

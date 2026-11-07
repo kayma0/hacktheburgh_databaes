@@ -87,7 +87,7 @@ function PlanView({ p, onCsv }: { p: Plan; onCsv: () => void }) {
           <button onClick={onCsv} className="rounded border px-3 py-1 text-sm">Export CSV</button>
           <button onClick={() => window.print()} className="rounded border px-3 py-1 text-sm">Print one-page brief</button>
         </div>}>
-        <div className="print-only mb-2 text-xs font-bold">SickleSupply · MODELLED ESTIMATE{p.sample_data ? " · SAMPLE DATA, NOT REAL" : ""}</div>
+        <div className="print-only mb-2 text-xs font-bold">SickleSignal · MODELLED ESTIMATE{p.sample_data ? " · SAMPLE DATA, NOT REAL" : ""}</div>
         <p className="mb-3 rounded bg-emerald-50 p-2 text-xs text-emerald-900">
           Partner service: <b>{p.partner_service}</b>. {p.safety_notice}
         </p>

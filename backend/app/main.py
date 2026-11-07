@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="SickleSupply API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="SickleSignal API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=[o for o in settings.cors_origins.split(",") if o],
                    allow_methods=["*"], allow_headers=["*"])
 
@@ -94,7 +94,7 @@ def plan(req: PlanRequest):
 
 @app.post("/api/plan.csv", response_class=PlainTextResponse)
 def plan_csv(req: PlanRequest):
-    name = f"sicklesupply_plan_{req.iso3}{'_' + req.admin1 if req.admin1 else ''}_MODELLED.csv".replace(" ", "_")
+    name = f"sicklesignal_plan_{req.iso3}{'_' + req.admin1 if req.admin1 else ''}_MODELLED.csv".replace(" ", "_")
     return PlainTextResponse(S().plan_csv(req), media_type="text/csv",
                              headers={"Content-Disposition": f'attachment; filename="{name}"'})
 

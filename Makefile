@@ -1,4 +1,4 @@
-# SickleSupply: one-command dev workflow
+# SickleSignal: one-command dev workflow
 PY ?= python3
 VENV = backend/.venv
 BIN = $(VENV)/bin
@@ -41,4 +41,4 @@ demo:             ## offline demo with placeholder SAMPLE data
 	$(MAKE) -j2 api web DEMO_MODE=sample
 
 clean:
-	rm -rf backend/.venv frontend/node_modules sicklesupply.db
+	rm -rf backend/.venv frontend/node_modules sicklesignal.db

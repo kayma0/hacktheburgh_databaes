@@ -99,7 +99,7 @@ def plan_drives(sim: SimResult, ds: Dataset, params: dict, *, iso3: str, admin1:
 
 
 def plan_to_csv(plan: dict, is_sample: bool) -> str:
-    lines = ["# SickleSupply Donor Drive Plan - MODELLED ESTIMATE" + (" - SAMPLE DATA, NOT REAL" if is_sample else ""),
+    lines = ["# SickleSignal Donor Drive Plan - MODELLED ESTIMATE" + (" - SAMPLE DATA, NOT REAL" if is_sample else ""),
              f"# {plan['safety_notice']}",
              f"# partner_service,{_csv(plan['partner_service'])}",
              "metric,p10,p50,p90"]
