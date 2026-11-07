@@ -93,7 +93,7 @@ export default function App() {
 
   return (
     <div className="page">
-      <h1>SickeSignal</h1>
+      <h1>SickleSignal</h1>
       <p className="subtitle">
         Modelled blood demand from sickle cell disease, and donors needed to cover it. Not a
         medical device. No clinical advice. Aggregate, modelled estimates only.
