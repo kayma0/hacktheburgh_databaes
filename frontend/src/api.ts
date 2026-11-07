@@ -10,31 +10,9 @@ export interface ScenarioResult {
   demand_pct_of_collections: Percentiles;
 }
 
-export type StockStatus = "ok" | "low" | "critical";
-
-export interface BloodTypeStock {
-  blood_type: string;
-  supply_share: number;
-  demand_share: number;
-  units_on_hand: number;
-  target_units: number;
-  units_after_crisis: Percentiles;
-  days_of_cover: Percentiles;
-  crisis_units: Percentiles;
-  shortfall_units: Percentiles;
-  donors_to_target: Percentiles;
-  status: StockStatus;
-}
-
 export interface SimulateResponse {
   country: string;
   is_sample_data: boolean;
-  affected_children: Percentiles;
-  collections_per_day: number;
-  target_stock_days: number;
-  stock: BloodTypeStock[];
-  crisis_units_total: Percentiles;
-  crisis_units_by_age: Record<string, Percentiles>;
   baseline: ScenarioResult;
   universal_diagnosis_hydroxyurea: ScenarioResult;
   units_avoided: Percentiles;
@@ -47,24 +25,6 @@ export interface SimulateRequest {
   share_diagnosed: number;
   share_on_hydroxyurea: number;
   target_coverage: number;
-  crisis_patients?: number;
-  stock_days_on_hand: number;
-  /** Keys: under_5, age_5_14, age_15_24, age_25_plus */
-  crisis_by_age?: Record<string, number>;
-}
-
-export interface HotspotItem {
-  country: string;
-  affected_children: Percentiles;
-  demand_units: Percentiles;
-  donors_needed: Percentiles;
-  demand_pct_of_collections: Percentiles;
-  heat: number;
-}
-
-export interface HotspotsResponse {
-  is_sample_data: boolean;
-  items: HotspotItem[];
 }
 
 export interface BriefingItem {
@@ -87,13 +47,6 @@ export interface BriefingResponse {
   fallback_used: boolean;
 }
 
-export interface ChatMessage {
-  role: "user" | "assistant";
-  text: string;
-  sources?: string[];
-  offline?: boolean;
-}
-
 async function postJson<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(path, {
     method: "POST",
@@ -101,11 +54,6 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`${path} failed: ${res.status}`);
-  return res.json();
-}
-
-export async function getHealth(): Promise<{ is_sample_data: boolean }> {
-  const res = await fetch("/api/health");
   return res.json();
 }
 
@@ -119,35 +67,6 @@ export function simulate(req: SimulateRequest): Promise<SimulateResponse> {
   return postJson("/api/simulate", req);
 }
 
-export async function getHotspots(): Promise<HotspotsResponse> {
-  const res = await fetch("/api/hotspots");
-  if (!res.ok) throw new Error(`/api/hotspots failed: ${res.status}`);
-  return res.json();
-}
-
-export function getBriefing(
-  country: string,
-  month: string,
-): Promise<BriefingResponse> {
+export function getBriefing(country: string, month: string): Promise<BriefingResponse> {
   return postJson("/api/briefing", { country, month });
-}
-
-/**
- * Field-briefing assistant. BACKEND TODO (teammate): implement
- * POST /api/assistant  { country, month, question, history: ChatMessage[] }
- *   -> { answer: string, sources?: string[] }
- * Until it exists, the UI shows an "assistant offline" reply.
- */
-export function askAssistant(
-  country: string,
-  month: string,
-  question: string,
-  history: ChatMessage[],
-): Promise<{ answer: string; sources?: string[] }> {
-  return postJson("/api/assistant", {
-    country,
-    month,
-    question,
-    history: history.map(({ role, text }) => ({ role, text })),
-  });
 }
