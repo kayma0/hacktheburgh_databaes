@@ -9,10 +9,40 @@ never a single point figure.
 - `data/raw/burden.csv` — affected children per country (P50, 2.5th/97.5th percentile).
   Source: GBD 2021 / Lancet Child & Adolescent Health SCD burden estimates. Until real data
   is placed there, `burden_SAMPLE.csv` is used and the UI shows a SAMPLE DATA banner.
-- `data/raw/who_blood.csv` — national blood collections per year. Source: WHO Global
-  Database on Blood Safety. Sample fallback: `who_blood_SAMPLE.csv`.
+- `data/raw/who_blood.csv` — **real data**, replacing the sample. National whole-blood
+  donation totals for 2018, from WHO, *Global status report on blood safety and
+  availability 2021* (Annex 3, "Blood donations 2014–2018"),
+  https://www.who.int/publications/i/item/9789240051683. `donations_per_1000` is
+  computed from that total and the matching UN WPP 2024 mid-year population estimate
+  (see `un_wpp_population_projections.csv` below). Caveat: Nigeria's figure is flagged
+  `partial_national_coverage` in the source report (not all facilities reported), so it
+  likely understates the true national rate.
 - `data/raw/parameters.yaml` — min/mode/max for each model parameter with a source, or
   `ASSUMPTION` if none was found.
+- `data/raw/africa_hotspot.csv` — national sickle cell anaemia (SCA) birth frequency and
+  projected newborns with SCA, 2010 vs. 2050, plus each country's global rank by
+  cumulative SCA births 2010–2050. Source: Piel FB et al. (2013), "Global Epidemiology
+  of Sickle Haemoglobin in Neonates," *PLOS Medicine* 10(7):e1001484, Table S2,
+  https://doi.org/10.1371/journal.pmed.1001484.s003. Not yet wired into the backend —
+  intended for the planned Africa hotspots page. Note: this paper's own population
+  projections date from ~2013 (pre-dating UN WPP 2024), so for forward projections
+  prefer combining its SCA *frequency* (which is a biological/genetic rate, not
+  time-sensitive) with current UN WPP birth projections below, rather than using its
+  2050 birth figures directly.
+- `data/raw/un_wpp_population_projections.csv` — population, births, under-5 deaths and
+  under-5 mortality rate (Q5) per country, 2015–2050, medium-variant projection. Source:
+  UN World Population Prospects 2024, https://population.un.org/wpp/. Intended for
+  scaling future SCA case/mortality projections on the hotspots page.
+- Untreated child mortality for the hotspots page: no file yet, but the citable estimate
+  is Grosse SD et al. (2011), "Sickle Cell Disease in Africa: A Neglected Cause of Early
+  Childhood Mortality," *Am J Prev Med* 41(6 Suppl 4):S398-405 (free full text:
+  https://pmc.ncbi.nlm.nih.gov/articles/PMC3708126) — 50%–90% of children born with SCA
+  in Africa die before age 5 without diagnosis/treatment. The authors themselves flag
+  the underlying data as weak, so treat this as a wide-uncertainty triangular
+  distribution (e.g. min 0.50 / mode 0.70 / max 0.90), not a point estimate.
+- `burden.csv` is still the sample (GBD 2021 Results Tool requires a free account and an
+  interactive query — see project notes for exact filter settings to export the real
+  file).
 
 ## Model
 
