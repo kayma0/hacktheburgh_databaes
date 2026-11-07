@@ -1,0 +1,8 @@
+[project]
+name = "sicklesupply"
+version = "0.1.0"
+requires-python = ">=3.11"
+description = "Modelled paediatric sickle cell blood-demand planner for charity blood-drive teams"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

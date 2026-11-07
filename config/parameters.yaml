@@ -1,0 +1,101 @@
+# SickleSupply model parameters.
+#
+# Every parameter has:
+#   kind:     SOURCED (from a cited source) or ASSUMPTION (team placeholder, adjustable in the UI)
+#   dist:     how it is sampled in the Monte Carlo (fixed | triangular | beta_mean | gamma_cv)
+#   source / todo: citation or what still needs citing
+#
+# Anything marked ASSUMPTION is shown with an ASSUMPTION flag in the UI, listed in
+# docs/METHOD.md, and can be overridden per request via the API "overrides" field.
+
+transfusion_rate_untreated:
+  kind: SOURCED
+  label: Transfusion events per 100 person-years, no hydroxyurea
+  value: 43.2
+  unit: events per 100 person-years
+  dist: gamma_cv
+  cv: 0.25            # ASSUMPTION: uncertainty around the trial rate (no CI supplied in spec)
+  source: "REACH trial (Tshilolo et al., NEJM 2019), pre-treatment period. TODO: verify figure and add CI from paper."
+  caveat: "Clinic-based children enrolled in a trial. NOT generalisable to all children with SCD in the region."
+
+transfusion_rate_hydroxyurea:
+  kind: SOURCED
+  label: Transfusion events per 100 person-years, maximum-dose hydroxyurea
+  value: 10.8
+  unit: events per 100 person-years
+  dist: gamma_cv
+  cv: 0.25            # ASSUMPTION, as above
+  source: "REACH trial (Tshilolo et al., NEJM 2019), treatment period. TODO: verify figure and add CI from paper."
+  caveat: "Clinic-based children on maximum tolerated dose. NOT generalisable."
+
+units_per_event:
+  kind: ASSUMPTION
+  label: Blood units per transfusion event (paediatric)
+  dist: triangular
+  min: 0.5
+  mode: 1.0
+  max: 2.0
+  unit: units
+  todo: "Cite paediatric transfusion volume (ml/kg) and typical unit size for the region."
+
+donor_deferral_rate:
+  kind: ASSUMPTION
+  label: Share of people attending a drive who are deferred (cannot donate)
+  dist: triangular
+  min: 0.10
+  mode: 0.20
+  max: 0.35
+  unit: share
+  todo: "Cite WHO / national blood service deferral statistics for the target country."
+
+donors_per_drive:
+  kind: ASSUMPTION
+  label: People attending one donation drive
+  dist: triangular
+  min: 30
+  mode: 60
+  max: 120
+  unit: attendees
+  todo: "Replace with the charity's own historic drive attendance."
+
+share_diagnosed:
+  kind: ASSUMPTION
+  label: Share of affected children who are diagnosed
+  dist: beta_mean
+  mean: 0.10
+  min: 0.02
+  max: 0.40
+  concentration: 40   # higher = tighter Beta around the mean
+  unit: share
+  todo: "Cite newborn-screening coverage / diagnosis estimates per country."
+
+share_on_hydroxyurea:
+  kind: ASSUMPTION
+  label: Share of diagnosed children on hydroxyurea
+  dist: beta_mean
+  mean: 0.05
+  min: 0.0
+  max: 0.60
+  concentration: 40
+  unit: share
+  todo: "Cite hydroxyurea access estimates per country."
+
+target_coverage:
+  kind: ASSUMPTION
+  label: Share of modelled SCD paediatric demand the charity aims to cover
+  dist: fixed
+  value: 0.25
+  min: 0.01
+  max: 1.0
+  unit: share
+  todo: "Programme decision, not a scientific parameter."
+
+universal_hydroxyurea_coverage:
+  kind: ASSUMPTION
+  label: Hydroxyurea coverage in the 'universal diagnosis + hydroxyurea' scenario
+  dist: fixed
+  value: 0.80
+  min: 0.0
+  max: 1.0
+  unit: share
+  todo: "Scenario setting. 100% is unrealistic (contraindications, adherence)."
