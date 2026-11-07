@@ -20,7 +20,7 @@ from .schemas import (
 
 load_dotenv()
 
-app = FastAPI(title="SickleSupply API")
+app = FastAPI(title="SickeSignal API")
 
 origins = os.environ.get("CORS_ORIGINS", "http://localhost:5173").split(",")
 app.add_middleware(

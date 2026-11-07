@@ -1,4 +1,4 @@
-# SickleSupply
+# SickeSignal
 
 Models blood demand from sickle cell disease (SCD) and the donors needed to cover it, for
 charity teams planning blood-donation drives. All figures are modelled with uncertainty
@@ -37,6 +37,6 @@ pytest
 ## Docker (single container, serves built frontend from FastAPI)
 
 ```
-docker build -t sicklesupply .
-docker run -p 8000:8000 --env-file .env sicklesupply
+docker build -t sickesignal .
+docker run -p 8000:8000 --env-file .env sickesignal
 ```

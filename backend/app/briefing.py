@@ -111,7 +111,7 @@ def get_briefing(country: str, month: str) -> BriefingResponse:
 def _call_gemini(country: str, month: str, api_key: str) -> BriefingResponse:
     from google import genai
 
-    model = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+    model = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
     client = genai.Client(api_key=api_key)
 
     prompt = (
