@@ -63,18 +63,31 @@ class SimulateResponse(BaseModel):
     units_avoided: Percentiles
 
 
+class HistoryPoint(BaseModel):
+    year: int
+    p10: float
+    p50: float
+    p90: float
+
+
 class HotspotItem(BaseModel):
     country: str
-    affected_children: Percentiles
-    demand_units: Percentiles
-    donors_needed: Percentiles
-    demand_pct_of_collections: Percentiles
     heat: float = Field(
-        description="0-1 composite of burden and pressure on collections")
+        description="0-1 composite of current burden and projected child deaths")
+    cases_now: Percentiles
+    cases_horizon: Percentiles
+    growth_pct_per_year: Percentiles
+    births_per_year_horizon: Percentiles
+    deaths_per_year_horizon: Percentiles
+    deaths_cumulative: Percentiles
+    history: list[HistoryPoint]
+    path: list[HistoryPoint]
 
 
 class HotspotsResponse(BaseModel):
-    is_sample_data: bool
+    data_year: int
+    horizon: int
+    u5_mortality_mode: float
     items: list[HotspotItem]
 
 

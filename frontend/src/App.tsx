@@ -15,6 +15,7 @@ import type {
   HotspotItem,
   HotspotsResponse,
   Percentiles,
+  YearPoint,
   SimulateResponse,
 } from "./api";
 
@@ -35,12 +36,15 @@ const MONTHS = [
   "December",
 ];
 
-type Page = "stock" | "hotspots" | "briefing";
+type Page = "hotspots" | "stock" | "briefing" | "blank";
+// "blank" is a placeholder for the next page to build; it is reached from the
+// hotspots page button rather than from the tab bar.
 const PAGES: { id: Page; num: string; label: string }[] = [
-  { id: "stock", num: "01", label: "Blood stock" },
-  { id: "hotspots", num: "02", label: "Hotspots" },
+  { id: "hotspots", num: "01", label: "Hotspots" },
+  { id: "stock", num: "02", label: "Blood stock" },
   { id: "briefing", num: "03", label: "Field briefing" },
 ];
+const ALL_PAGES: Page[] = ["hotspots", "stock", "briefing", "blank"];
 
 const fmt = (n: number) => Math.round(n).toLocaleString("en-GB");
 const pct = (v: number) => `${Math.round(v * 100)}%`;
@@ -56,7 +60,7 @@ const niceCeil = (x: number) => {
 
 function readPage(): Page {
   const h = window.location.hash.replace("#/", "");
-  return PAGES.some((p) => p.id === h) ? (h as Page) : "stock";
+  return ALL_PAGES.includes(h as Page) ? (h as Page) : "hotspots";
 }
 
 /* ───────────────────────── app shell ───────────────────────── */
@@ -132,7 +136,7 @@ export default function App() {
           saveSession(s);
           setSession(s);
           setCountryState(s.country);
-          go("stock");
+          go("hotspots");
         }}
       />
     );
@@ -147,7 +151,7 @@ export default function App() {
     <div className="shell">
       <header className="mast">
         <div className="mast-inner">
-          <a className="brand" href="#/stock" aria-label="SickleSignal home">
+          <a className="brand" href="#/hotspots" aria-label="SickleSignal home">
             <BrandMark />
             <span className="brand-word">
               <em>Sickle</em>Signal
@@ -191,8 +195,10 @@ export default function App() {
               setCountry(c);
               go("stock");
             }}
+            onBlank={() => go("blank")}
           />
         )}
+        {page === "blank" && <BlankPage onBack={() => go("hotspots")} />}
         {page === "briefing" && (
           <BriefingPage
             countries={countries}
@@ -1048,7 +1054,7 @@ function Dial({
   );
 }
 
-/* ───────────────────────── page 02: hotspots ───────────────────────── */
+/* ───────────────────────── page 01: hotspots ───────────────────────── */
 
 // Equirectangular projection for the Africa frame.
 const K = 8;
@@ -1229,6 +1235,8 @@ const CENTROIDS: Record<string, [number, number]> = {
   djibouti: [42.6, 11.8],
   eswatini: [31.5, -26.5],
   lesotho: [28.2, -29.6],
+  saotomeandprincipe: [6.6, 0.3],
+  comoros: [43.3, -11.7],
 };
 const ALIASES: Record<string, string> = {
   drc: "democraticrepublicofthecongo",
@@ -1258,19 +1266,117 @@ function crescentPath(cx: number, cy: number, r: number) {
   return `M ${cx} ${cy - r} A ${r} ${r} 0 1 0 ${cx} ${cy + r} A ${ri} ${ri} 0 0 1 ${cx} ${cy - r} Z`;
 }
 
-function HotspotsPage({ onOpen }: { onOpen: (country: string) => void }) {
+const fmtBig = (n: number) => {
+  const a = Math.abs(n);
+  if (a >= 1e6) return `${(n / 1e6).toFixed(a >= 1e7 ? 0 : 1)}M`;
+  if (a >= 1e4) return `${Math.round(n / 1e3)}k`;
+  if (a >= 1e3) return `${(n / 1e3).toFixed(1)}k`;
+  return String(Math.round(n));
+};
+
+/** History (solid) + projection (dashed, with P10–P90 band) for one country. */
+function TrendChart({
+  history,
+  path,
+  dataYear,
+}: {
+  history: YearPoint[];
+  path: YearPoint[];
+  dataYear: number;
+}) {
+  const W = 360;
+  const H = 150;
+  const padL = 40;
+  const padB = 20;
+  const padT = 8;
+  const all = [...history, ...path];
+  const x0 = history[0]?.year ?? dataYear;
+  const x1 = path[path.length - 1]?.year ?? dataYear;
+  const yMax = niceCeil(Math.max(...all.map((p) => p.p90), 1));
+  const X = (yr: number) => padL + ((yr - x0) / (x1 - x0 || 1)) * (W - padL - 6);
+  const Y = (v: number) => padT + (1 - v / yMax) * (H - padT - padB);
+  const line = (pts: YearPoint[], k: "p10" | "p50" | "p90") =>
+    pts.map((p, i) => `${i ? "L" : "M"}${X(p.year).toFixed(1)} ${Y(p[k]).toFixed(1)}`).join(" ");
+  const band =
+    path.length > 1
+      ? `${line(path, "p90")} ${[...path]
+          .reverse()
+          .map((p) => `L${X(p.year).toFixed(1)} ${Y(p.p10).toFixed(1)}`)
+          .join(" ")} Z`
+      : "";
+  const ticks = [0, 0.5, 1].map((f) => f * yMax);
+  const xt = [x0, dataYear, x1];
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      className="trend"
+      role="img"
+      aria-label="Cases to date and projection"
+    >
+      {ticks.map((t) => (
+        <g key={t}>
+          <line x1={padL} x2={W - 6} y1={Y(t)} y2={Y(t)} className="trend-grid" />
+          <text x={padL - 5} y={Y(t) + 3} textAnchor="end" className="trend-tick">
+            {fmtBig(t)}
+          </text>
+        </g>
+      ))}
+      {band && <path d={band} className="trend-band" />}
+      <path d={line(history, "p50")} className="trend-hist" />
+      <path d={line(path, "p50")} className="trend-proj" />
+      <line x1={X(dataYear)} x2={X(dataYear)} y1={padT} y2={H - padB} className="trend-now" />
+      {xt.map((yr, i) => (
+        <text
+          key={`${yr}-${i}`}
+          x={X(yr)}
+          y={H - 5}
+          textAnchor={i === 0 ? "start" : i === 2 ? "end" : "middle"}
+          className="trend-tick"
+        >
+          {yr}
+        </text>
+      ))}
+    </svg>
+  );
+}
+
+function HotspotsPage({
+  onOpen,
+  onBlank,
+}: {
+  onOpen: (country: string) => void;
+  onBlank: () => void;
+}) {
   const [data, setData] = useState<HotspotsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sel, setSel] = useState<string | null>(null);
+  const [horizon, setHorizon] = useState(2035);
+  const [mortality, setMortality] = useState(0.7);
+  // Sliders move freely; the request is sent once they settle.
+  const [query, setQuery] = useState({ horizon: 2035, mortality: 0.7 });
 
   useEffect(() => {
-    getHotspots()
+    const t = window.setTimeout(
+      () => setQuery({ horizon, mortality }),
+      250,
+    );
+    return () => window.clearTimeout(t);
+  }, [horizon, mortality]);
+
+  useEffect(() => {
+    let live = true;
+    setError(null);
+    getHotspots(query.horizon, query.mortality)
       .then((d) => {
+        if (!live) return;
         setData(d);
-        if (d.items.length) setSel(d.items[0].country);
+        setSel((cur) => cur ?? d.items[0]?.country ?? null);
       })
-      .catch((e) => setError(String(e)));
-  }, []);
+      .catch((e) => live && setError(String(e)));
+    return () => {
+      live = false;
+    };
+  }, [query]);
 
   const placed = useMemo(() => {
     const items = data?.items ?? [];
@@ -1289,24 +1395,72 @@ function HotspotsPage({ onOpen }: { onOpen: (country: string) => void }) {
 
   const selected = data?.items.find((i) => i.country === sel) ?? null;
   const top = new Set((data?.items ?? []).slice(0, 6).map((i) => i.country));
-  const ordered = [...(data?.items ?? [])];
+  const ordered = data?.items ?? [];
+  const dataYear = data?.data_year ?? 2023;
+  const hz = data?.horizon ?? query.horizon;
+
+  const totalDeaths = useMemo(() => {
+    const items = data?.items ?? [];
+    // Sum of medians: indicative only; P10/P90 of a sum are not the sum of P10/P90.
+    return items.reduce((a, i) => a + i.deaths_cumulative.p50, 0);
+  }, [data]);
 
   return (
     <>
       <section className="hero hero-left">
-        <p className="eyebrow">Continental heat index · default assumptions</p>
+        <p className="eyebrow">
+          Africa · GBD cases {dataYear} · projected to {hz}
+        </p>
         <h1 className="hero-title">
-          Where sickle cell <em>pulls hardest</em> on the blood supply
+          Where sickle cell is <em>concentrated</em>, and where it is{" "}
+          <em>heading</em>
         </h1>
         <p className="hero-sub">
           Each crescent sits on a country. The bigger and darker it is, the more
-          children are living with SCD <i>and</i> the bigger the share of
-          national blood collections their transfusions would take. Click one to
-          stress-test that country.
+          people live with SCD and the more children are projected to die before
+          their fifth birthday if nothing changes. Click one for the detail.
         </p>
+        <div className="hero-actions">
+          <button className="btn" onClick={onBlank}>
+            Go to the next page →
+          </button>
+        </div>
+      </section>
+
+      <section className="hot-dials" aria-label="Projection settings">
+        <Dial
+          label="Look ahead to"
+          value={horizon}
+          min={2025}
+          max={2050}
+          step={1}
+          format={(v) => String(v)}
+          hint="Cases follow each country's own 2009–2023 trend, with the trend itself uncertain."
+          onChange={setHorizon}
+        />
+        <Dial
+          label="Child deaths before age 5 without early care"
+          value={mortality}
+          min={0.5}
+          max={0.9}
+          step={0.01}
+          format={(v) => pct(v)}
+          hint="Most likely value; range 50–90% (Grosse 2011, weak data)."
+          onChange={setMortality}
+        />
       </section>
 
       {error && <div className="alert">Couldn't load hotspots: {error}</div>}
+      {!data && !error && <p className="fine">Running the projection…</p>}
+
+      {data && (
+        <p className="topline">
+          Across the {data.items.length} countries, roughly{" "}
+          <b>{fmtBig(totalDeaths)}</b> children could die before age 5 between{" "}
+          {dataYear + 1} and {hz} without early diagnosis and care
+          <small> (sum of country medians; modelled, not observed)</small>
+        </p>
+      )}
 
       <div className="atlas">
         <figure className="map-card">
@@ -1345,7 +1499,7 @@ function HotspotsPage({ onOpen }: { onOpen: (country: string) => void }) {
                   tabIndex={0}
                   role="button"
                   aria-label={`${it.country}, heat ${Math.round(it.heat * 100)}`}
-                  onKeyDown={(e) => e.key === "Enter" && onOpen(it.country)}
+                  onKeyDown={(e) => e.key === "Enter" && setSel(it.country)}
                 >
                   <path
                     d={crescentPath(x, y, r)}
@@ -1404,24 +1558,49 @@ function HotspotsPage({ onOpen }: { onOpen: (country: string) => void }) {
                 />
                 <b>{Math.round(selected.heat * 100)}</b>
               </div>
+              <TrendChart
+                history={selected.history}
+                path={selected.path}
+                dataYear={dataYear}
+              />
+              <p className="trend-key">
+                <i className="k-hist" /> GBD estimate
+                <i className="k-proj" /> projection (P10–P90 shaded)
+              </p>
               <dl className="facts">
                 <Fact
-                  k="Children living with SCD"
-                  p={selected.affected_children}
-                />
-                <Fact k="SCD units / year (today)" p={selected.demand_units} />
-                <Fact
-                  k="Donors / year to cover target"
-                  p={selected.donors_needed}
+                  k={`People with SCD, ${dataYear}`}
+                  p={selected.cases_now}
+                  big
                 />
                 <Fact
-                  k="Share of national collections"
-                  p={selected.demand_pct_of_collections}
+                  k={`People with SCD, ${hz}`}
+                  p={selected.cases_horizon}
+                  big
+                />
+                <Fact
+                  k="Yearly growth"
+                  p={selected.growth_pct_per_year}
                   suffix="%"
+                />
+                <Fact
+                  k={`Babies born with SCD / yr, ${hz}`}
+                  p={selected.births_per_year_horizon}
+                  big
+                />
+                <Fact
+                  k={`Child deaths / yr by ${hz}, no early care`}
+                  p={selected.deaths_per_year_horizon}
+                  big
+                />
+                <Fact
+                  k={`Child deaths ${dataYear + 1}–${hz}, no early care`}
+                  p={selected.deaths_cumulative}
+                  big
                 />
               </dl>
               <button className="btn" onClick={() => onOpen(selected.country)}>
-                Stress-test {selected.country} →
+                Stress-test {selected.country}'s blood stock →
               </button>
             </article>
           )}
@@ -1452,23 +1631,49 @@ function HotspotsPage({ onOpen }: { onOpen: (country: string) => void }) {
           </ol>
           {placed.off.length > 0 && (
             <p className="fine">
-              Not placed on the map (name not recognised):{" "}
-              {placed.off.map((i) => i.country).join(", ")}
+              Not drawn on the map (island states or unrecognised names), still
+              ranked: {placed.off.map((i) => i.country).join(", ")}
             </p>
           )}
         </aside>
       </div>
 
       <section className="assume">
-        <h3>How the heat index works</h3>
+        <h3>How this is worked out</h3>
         <p>
-          Heat = ½ × (affected children ÷ highest country) + ½ × (SCD demand as
-          % of collections ÷ highest country), at default assumptions (20%
-          diagnosed, 2 units per event). It ranks where to look first. It isn't
-          a forecast of deaths.
+          <b>Observed:</b> number of people with sickle cell disorders per
+          country, 1996–{dataYear} (Global Burden of Disease, with its 95%
+          interval). <b>Heading:</b> a straight-line trend in the logarithm of
+          that series over the last 15 years, extended to {hz}. The trend's
+          slope is treated as uncertain, so every figure is a P10 / P50 / P90
+          range. <b>Child deaths:</b> babies born with SCD each year (an{" "}
+          <i>assumption</i>: 3–9% of people living with SCD, most likely 5%) ×
+          the share who die before age 5 without diagnosis and care (50–90%,
+          Grosse et al. 2011, flagged there as weak data). <b>Heat</b> = ½
+          current cases + ½ projected child deaths, each scaled to the
+          highest country, then square-rooted so mid-sized countries stay
+          visible. Modelled estimates, not observations. Not a medical device;
+          no clinical advice.
         </p>
       </section>
     </>
+  );
+}
+
+function BlankPage({ onBack }: { onBack: () => void }) {
+  return (
+    <section className="hero hero-left">
+      <p className="eyebrow">Next page</p>
+      <h1 className="hero-title">
+        <em>Blank</em> for now
+      </h1>
+      <p className="hero-sub">This page is reserved for what we build next.</p>
+      <div className="hero-actions">
+        <button className="btn" onClick={onBack}>
+          ← Back to hotspots
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -1476,13 +1681,17 @@ function Fact({
   k,
   p,
   suffix = "",
+  big = false,
 }: {
   k: string;
   p: Percentiles;
   suffix?: string;
+  big?: boolean;
 }) {
   const show = (v: number) =>
-    (suffix ? v.toFixed(v < 10 ? 1 : 0) : fmt(v)) + suffix;
+    big
+      ? fmtBig(v)
+      : (suffix ? v.toFixed(Math.abs(v) < 10 ? 1 : 0) : fmt(v)) + suffix;
   return (
     <div className="fact">
       <dt>{k}</dt>

@@ -1698,3 +1698,89 @@ input[type="range"]:focus-visible {
     max-width: 92%;
   }
 }
+
+/* ───────── hotspots: projection controls, trend chart, blank page ───────── */
+.hero-actions {
+  margin-top: 20px;
+}
+.hot-dials {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 16px 22px;
+  margin-bottom: 18px;
+}
+.topline {
+  margin: 0 0 18px;
+  font-size: 17px;
+  color: var(--ink);
+}
+.topline b {
+  font-family: var(--mono);
+  color: var(--oxblood);
+}
+.topline small {
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+.trend {
+  width: 100%;
+  height: auto;
+  display: block;
+  margin-bottom: 4px;
+}
+.trend-grid {
+  stroke: rgba(251, 243, 238, 0.22);
+  stroke-dasharray: 2 3;
+}
+.trend-tick {
+  font-family: var(--mono);
+  font-size: 9px;
+  fill: rgba(251, 243, 238, 0.7);
+}
+.trend-hist {
+  fill: none;
+  stroke: var(--paper);
+  stroke-width: 2;
+}
+.trend-proj {
+  fill: none;
+  stroke: var(--salmon);
+  stroke-width: 2;
+  stroke-dasharray: 5 3;
+}
+.trend-band {
+  fill: var(--salmon);
+  opacity: 0.28;
+}
+.trend-now {
+  stroke: rgba(251, 243, 238, 0.45);
+  stroke-width: 1;
+}
+.trend-key {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  font-size: 12px;
+  margin: 0 0 12px;
+  opacity: 0.85;
+}
+.trend-key i {
+  display: inline-block;
+  width: 16px;
+  height: 0;
+  border-top: 2px solid var(--paper);
+  margin-right: 5px;
+  vertical-align: middle;
+}
+.trend-key i.k-proj {
+  border-top: 2px dashed var(--salmon);
+}
+@media (max-width: 720px) {
+  .hot-dials {
+    grid-template-columns: 1fr;
+  }
+}

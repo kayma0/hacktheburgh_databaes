@@ -71,3 +71,24 @@ Every output is reported as P10 / P50 / P90.
   uptake, target coverage) have no cited source and are ASSUMPTIONS — adjustable via
   sliders in the UI.
 - Donations must be voluntary, unpaid, and go through a licensed national blood service.
+
+## Hotspots page (`backend/app/hotspots.py`, reads `data/raw.csv`)
+
+`data/raw.csv` is the GBD export of sickle cell disorders **prevalence** (number of
+people, all ages, both sexes) for 54 African countries, 1996–2023, with a 95% interval.
+10,000 Monte Carlo draws per country (seed `20261107`), reported as P10/P50/P90:
+
+1. Cases today ~ lognormal matched to the 2023 value and its 95% interval.
+2. Growth: log-linear trend over 2009–2023. Slope ~ normal with SD = √(regression SE² +
+   0.006²). The 0.006 floor is an ASSUMPTION so extrapolation is not falsely tight.
+3. Cases in year *t* = cases today × exp(slope × (*t* − 2023)), up to the chosen horizon.
+4. Babies born with SCD per year = cases × a fraction ~ triangular(0.03, 0.05, 0.09).
+   ASSUMPTION, roughly calibrated to Piel et al. 2013 (Nigeria ≈ 90k SCA births in 2010
+   vs ≈ 1.9M GBD cases). Recalled from memory, not from a file in this repo: verify.
+5. Child deaths before age 5 without early care = births × mortality ~ triangular(0.50,
+   mode, 0.90); the mode is a slider (default 0.70). Source: Grosse et al. 2011.
+6. Heat = √(½ · cases today / max + ½ · cumulative projected deaths / max).
+
+Not modelled: deaths averted by intervention, migration, changes in survival or birth
+rates over time, and any difference between SCD and SCA (the data counts all sickle cell
+disorders; the mortality range is for SCA).

@@ -4,17 +4,17 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from . import hotspots as hotspots_mod
 from . import model
 from .briefing import get_briefing
 from .data_loader import load_data
 from .schemas import (
     BriefingRequest,
     BriefingResponse,
-    HotspotItem,
     HotspotsResponse,
     SimulateRequest,
     SimulateResponse,
@@ -32,10 +32,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DATA = load_data()
+# Legacy model data (burden / WHO blood / parameters). The stock and briefing pages need
+# it; the hotspots page does not, so a missing file must not stop the API starting.
+try:
+    DATA = load_data()
+except FileNotFoundError:
+    DATA = None
+
+
+def _need_data():
+    if DATA is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Blood-stock model data is not in data/raw/ yet.",
+        )
+    return DATA
 
 
 def _inputs_for(country: str) -> tuple[dict, float] | None:
+    _need_data()
     burden_rows = DATA.burden[DATA.burden["country"] == country]
     who_rows = DATA.who_blood[DATA.who_blood["country"] == country]
     if burden_rows.empty or who_rows.empty:
@@ -48,11 +63,13 @@ def _inputs_for(country: str) -> tuple[dict, float] | None:
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "is_sample_data": DATA.is_sample}
+    return {"status": "ok", "is_sample_data": DATA.is_sample if DATA else False}
 
 
 @app.get("/api/countries")
 def countries():
+    if DATA is None:
+        return {"countries": sorted(hotspots_mod.load_series())}
     return {"countries": sorted(DATA.burden["country"].tolist())}
 
 
@@ -81,52 +98,17 @@ def simulate(req: SimulateRequest):
     return SimulateResponse(country=req.country, is_sample_data=DATA.is_sample, **result)
 
 
-_hotspots_cache: HotspotsResponse | None = None
-
-
 @app.get("/api/hotspots", response_model=HotspotsResponse)
-def hotspots():
-    """Every country at default assumptions, scored for the Africa heat map."""
-    global _hotspots_cache
-    if _hotspots_cache is not None:
-        return _hotspots_cache
-
-    d = SimulateRequest(country="")
-    rows = []
-    for country in sorted(DATA.burden["country"].unique()):
-        inputs = _inputs_for(country)
-        if inputs is None:
-            continue
-        burden_row, collections_per_year = inputs
-        res = model.run_simulation(
-            burden_row=burden_row,
-            collections_per_year=collections_per_year,
-            params=DATA.parameters,
-            share_diagnosed=d.share_diagnosed,
-            share_on_hydroxyurea=d.share_on_hydroxyurea,
-            units_per_event=d.units_per_event,
-            donor_deferral_rate=d.donor_deferral_rate,
-            target_coverage=d.target_coverage,
-        )
-        rows.append({
-            "country": country,
-            "affected_children": res["affected_children"],
-            "demand_units": res["baseline"]["demand_units"],
-            "donors_needed": res["baseline"]["donors_needed"],
-            "demand_pct_of_collections": res["baseline"]["demand_pct_of_collections"],
-        })
-
-    a_max = max((r["affected_children"]["p50"] for r in rows), default=1) or 1
-    p_max = max((r["demand_pct_of_collections"]["p50"]
-                for r in rows), default=1) or 1
-    for r in rows:
-        r["heat"] = 0.5 * r["affected_children"]["p50"] / a_max + \
-            0.5 * r["demand_pct_of_collections"]["p50"] / p_max
-    rows.sort(key=lambda r: r["heat"], reverse=True)
-
-    _hotspots_cache = HotspotsResponse(
-        is_sample_data=DATA.is_sample, items=[HotspotItem(**r) for r in rows])
-    return _hotspots_cache
+def hotspots(
+    horizon: int = Query(hotspots_mod.DEFAULT_HORIZON,
+                         ge=hotspots_mod.MIN_HORIZON, le=hotspots_mod.MAX_HORIZON),
+    u5_mortality: float = Query(hotspots_mod.DEFAULT_U5_MORTALITY_MODE,
+                                ge=hotspots_mod.U5_MORTALITY_BOUNDS[0],
+                                le=hotspots_mod.U5_MORTALITY_BOUNDS[1]),
+):
+    """Every country from data/raw.csv: burden now, projected to `horizon`, and the
+    under-5 deaths expected without early diagnosis and care."""
+    return hotspots_mod.compute_hotspots(horizon, u5_mortality)
 
 
 @app.post("/api/briefing", response_model=BriefingResponse)

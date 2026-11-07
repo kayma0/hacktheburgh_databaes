@@ -53,17 +53,32 @@ export interface SimulateRequest {
   crisis_by_age?: Record<string, number>;
 }
 
+export interface YearPoint {
+  year: number;
+  p10: number;
+  p50: number;
+  p90: number;
+}
+
 export interface HotspotItem {
   country: string;
-  affected_children: Percentiles;
-  demand_units: Percentiles;
-  donors_needed: Percentiles;
-  demand_pct_of_collections: Percentiles;
   heat: number;
+  cases_now: Percentiles;
+  cases_horizon: Percentiles;
+  growth_pct_per_year: Percentiles;
+  births_per_year_horizon: Percentiles;
+  deaths_per_year_horizon: Percentiles;
+  deaths_cumulative: Percentiles;
+  /** Observed GBD series (p50 = estimate, p10/p90 = its 95% interval). */
+  history: YearPoint[];
+  /** Modelled projection from the last data year to the horizon. */
+  path: YearPoint[];
 }
 
 export interface HotspotsResponse {
-  is_sample_data: boolean;
+  data_year: number;
+  horizon: number;
+  u5_mortality_mode: number;
   items: HotspotItem[];
 }
 
@@ -119,8 +134,15 @@ export function simulate(req: SimulateRequest): Promise<SimulateResponse> {
   return postJson("/api/simulate", req);
 }
 
-export async function getHotspots(): Promise<HotspotsResponse> {
-  const res = await fetch("/api/hotspots");
+export async function getHotspots(
+  horizon: number,
+  u5Mortality: number,
+): Promise<HotspotsResponse> {
+  const q = new URLSearchParams({
+    horizon: String(horizon),
+    u5_mortality: String(u5Mortality),
+  });
+  const res = await fetch(`/api/hotspots?${q}`);
   if (!res.ok) throw new Error(`/api/hotspots failed: ${res.status}`);
   return res.json();
 }
