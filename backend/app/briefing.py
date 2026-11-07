@@ -95,14 +95,18 @@ def get_briefing(country: str, month: str) -> BriefingResponse:
         _cache[key] = result
         return result
 
-    try:
-        from concurrent.futures import ThreadPoolExecutor
+    from concurrent.futures import ThreadPoolExecutor
 
-        with ThreadPoolExecutor(max_workers=1) as pool:
-            future = pool.submit(_call_gemini, country, month, api_key)
-            result = future.result(timeout=TIMEOUT_S)
+    # Not a `with` block: its exit waits for the thread, which defeats the timeout.
+    pool = ThreadPoolExecutor(max_workers=1)
+    try:
+        future = pool.submit(_call_gemini, country, month, api_key)
+        result = future.result(timeout=TIMEOUT_S)
     except Exception:
-        result = _fallback(country, month)
+        # Don't cache transient failures, so the next request retries Gemini.
+        return _fallback(country, month)
+    finally:
+        pool.shutdown(wait=False)
 
     _cache[key] = result
     return result
@@ -135,7 +139,8 @@ def _call_gemini(country: str, month: str, api_key: str) -> BriefingResponse:
     )
 
     sections = BriefingResponse.model_validate(
-        {"country": country, "month": month, "grounded": False, "sections": [], "fallback_used": False}
+        {"country": country, "month": month, "grounded": False,
+            "sections": [], "fallback_used": False}
     )
     import json
 
