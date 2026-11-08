@@ -3148,11 +3148,10 @@ input[type="range"]:focus-visible {
   color: var(--firebrick);
 }
 @media print {
+  /* Sections are opened by script before printing: a closed <details> cannot be
+     un-hidden from CSS. */
   .brief-list details {
     break-inside: avoid;
-  }
-  .brief-list details > ul {
-    display: block;
   }
   .brief-links a {
     color: #000;

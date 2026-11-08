@@ -2333,6 +2333,36 @@ function TravelBriefPage({
     };
   }, [c]);
 
+  // A collapsed <details> prints as its heading alone, because the browser hides the rest
+  // in a way print CSS cannot reach. So open every section for the printout and put the
+  // closed ones back afterwards. Covers the button and the browser's own print command.
+  useEffect(() => {
+    let reopened: HTMLDetailsElement[] | null = null;
+
+    const openAll = () => {
+      if (reopened) return; // some browsers fire both events below
+      reopened = [...document.querySelectorAll<HTMLDetailsElement>(".brief-sec")].filter(
+        (d) => !d.open,
+      );
+      reopened.forEach((d) => (d.open = true));
+    };
+    const restore = () => {
+      reopened?.forEach((d) => (d.open = false));
+      reopened = null;
+    };
+    const onMedia = (e: MediaQueryListEvent) => (e.matches ? openAll() : restore());
+
+    const mql = window.matchMedia("print"); // Safari has no beforeprint/afterprint
+    window.addEventListener("beforeprint", openAll);
+    window.addEventListener("afterprint", restore);
+    mql.addEventListener("change", onMedia);
+    return () => {
+      window.removeEventListener("beforeprint", openAll);
+      window.removeEventListener("afterprint", restore);
+      mql.removeEventListener("change", onMedia);
+    };
+  }, []);
+
   const shown = brief && brief.country === c ? brief : null;
 
   return (
