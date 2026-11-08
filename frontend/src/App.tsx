@@ -9,6 +9,7 @@ import type {
 } from "react";
 import {
   askAssistant,
+  draftAppeal,
   getBriefing,
   getCountries,
   getCrisis,
@@ -18,6 +19,7 @@ import {
   simulate,
 } from "./api";
 import type {
+  AppealResponse,
   BloodTypeStock,
   BriefingResponse,
   CrisisResponse,
@@ -560,6 +562,7 @@ function BloodBag({
   max,
   ghost,
   caption,
+  showRange = true,
 }: {
   type: string;
   days: Percentiles;
@@ -568,6 +571,8 @@ function BloodBag({
   max: number;
   ghost: boolean;
   caption?: ReactNode;
+  /** The small P10–P90 pill under the days. */
+  showRange?: boolean;
 }) {
   const clip = useId().replace(/:/g, "");
   const top = 34;
@@ -658,9 +663,11 @@ function BloodBag({
         <span className="bag-unit">days</span>
         {!ghost && (
           <>
-            <span className="bag-range">
-              {fmtDays(days.p10)}–{fmtDays(days.p90)}
-            </span>
+            {showRange && (
+              <span className="bag-range">
+                {fmtDays(days.p10)}–{fmtDays(days.p90)}
+              </span>
+            )}
             {caption}
           </>
         )}
@@ -1313,13 +1320,6 @@ const AGE_SINGULAR: Record<string, string> = {
   teens: "teen aged 10–19",
   adults: "adult aged 20+",
 };
-// One red, light to dark by age (validated as an ordinal ramp against the card surface).
-const AGE_COLOR: Record<string, string> = {
-  under_5: "#EE9273",
-  children: "#D9503A",
-  teens: "#A81E22",
-  adults: "#6E0A12",
-};
 
 function ReservoirPage({
   country,
@@ -1354,32 +1354,21 @@ function ReservoirPage({
 
   return (
     <>
+      <div className="page-back">
+        <button className="btn btn-ghost" onClick={onBack}>
+          ← Back to hotspots
+        </button>
+      </div>
       <section className="hero">
         <p className="eyebrow">
-          Modelled blood reservoir <span className="dot-sep">·</span>
           <span className={`live ${loading ? "is-busy" : ""}`}>
-            {loading ? "running 10,000 draws" : "not live stock"}
+            {loading ? "loading" : "not live stock"}
           </span>
         </p>
         <div className="hero-place">
           Blood stock levels across
           <em className="hero-country">{country || "…"}</em>
         </div>
-        <p className="hero-sub">
-          How many days each blood group could hold, given what{" "}
-          {country || "this country"} collects and what its hospitals and
-          sickle cell patients use. Big number: median. Small: P10–P90 range.
-          {r && (
-            <>
-              {" "}
-              Collections projected to <b>{r.data_year}</b> from{" "}
-              {r.donations_reported_year
-                ? `reported figures up to ${r.donations_reported_year}`
-                : "the WHO Africa average"}
-              .
-            </>
-          )}
-        </p>
       </section>
 
       {error && <div className="alert">Couldn't load the reservoir: {error}</div>}
@@ -1398,6 +1387,7 @@ function ReservoirPage({
                 target={target}
                 max={target}
                 ghost={false}
+                showRange={false}
                 caption={
                   <span className="bag-units">
                     <b>{fmtRate(t.donated_per_day.p50)}</b> donated/day
@@ -1419,8 +1409,7 @@ function ReservoirPage({
       </section>
 
       <p className="target-note">
-        {country || "This country"} aims to retain <b>{fmtDays(target)} days</b> of
-        stock at any time. A full bag means that target is met.{" "}
+        Full bag = <b>{fmtDays(target)}-day</b> target{" "}
         {r && <SourceTag assumed={r.target_is_assumption} title={r.target_source} />}
       </p>
 
@@ -1515,12 +1504,9 @@ function CrisisSimulator({ country }: { country: string }) {
   return (
     <section className="panel sim">
       <header className="panel-head">
-        <span className="panel-key">⚡</span>
         <h2>Crisis simulator</h2>
         <p>
-          Pick how many people go into a sickle cell crisis and over how long,
-          then run 5,000 simulations to see whether{" "}
-          {country || "this country"}'s blood supply could cover them.
+          What if people with sickle cell go into crisis? Will there be enough blood?
         </p>
       </header>
 
@@ -1548,13 +1534,13 @@ function CrisisSimulator({ country }: { country: string }) {
       <div className="sim-options">
         <Toggle
           label="Use O− when a group runs out"
-          hint="O− is the universal red-cell donor: anyone can receive it"
+          hint="Universal donor for anyone"
           checked={oNegFallback}
           onChange={setONegFallback}
         />
         <Toggle
           label="Crisis patients first"
-          hint="Hospitals hold back blood from other patients for the crisis"
+          hint="Other patients wait"
           checked={crisisFirst}
           onChange={setCrisisFirst}
         />
@@ -1575,180 +1561,178 @@ function CrisisSimulator({ country }: { country: string }) {
   );
 }
 
-/** Donut of the people in crisis in one typical simulation, by age group. */
-function AgeDonut({ res }: { res: CrisisResponse }) {
-  const [hover, setHover] = useState<string | null>(null);
-  const total = res.example.length;
-  const without = res.example.filter((p) => !p.served).length;
-  const R = 70;
-  const r = 46;
-  const C = 2 * Math.PI;
-  const GAP = total > 1 ? 0.035 : 0; // radians of surface between slices
-  let a0 = -Math.PI / 2;
-  const arcs = AGE_ORDER.filter((a) => res.example_counts[a] > 0).map((a) => {
-    const n = res.example_counts[a];
-    const sweep = (n / total) * C;
-    const s0 = a0 + (sweep >= C - 1e-6 ? 0 : GAP / 2);
-    const s1 = a0 + sweep - (sweep >= C - 1e-6 ? 1e-4 : GAP / 2);
-    a0 += sweep;
-    const large = s1 - s0 > Math.PI ? 1 : 0;
-    const p = (rad: number, rr: number) => `${80 + rr * Math.cos(rad)} ${80 + rr * Math.sin(rad)}`;
-    const d = `M ${p(s0, R)} A ${R} ${R} 0 ${large} 1 ${p(s1, R)} L ${p(s1, r)} A ${r} ${r} 0 ${large} 0 ${p(s0, r)} Z`;
-    const lost = res.example.filter((x) => x.age_group === a && !x.served).length;
-    return { a, n, d, lost };
-  });
-  const label = (a: string) => res.age_group_labels[a].replace(/(\d)-(\d)/g, "$1–$2");
-  const h = arcs.find((x) => x.a === hover);
+/* Donated blood is tested and processed before use (typically 1-2 days), so donors must
+   give this many days before the shortage they cover. */
+const PROCESSING_DAYS = 2;
 
-  return (
-    <figure className="donut">
-      <svg viewBox="0 0 160 160" role="img" aria-label={`Who is in crisis: ${arcs.map((x) => `${x.n} ${label(x.a)}`).join(", ")}`}>
-        {arcs.map((x) => (
-          <path
-            key={x.a}
-            d={x.d}
-            fill={AGE_COLOR[x.a]}
-            className={hover && hover !== x.a ? "is-dim" : ""}
-            onMouseEnter={() => setHover(x.a)}
-            onMouseLeave={() => setHover(null)}
-          >
-            <title>{`${x.n} ${label(x.a)} · ${x.lost} without blood`}</title>
-          </path>
-        ))}
-        <text x="80" y="76" textAnchor="middle" className="donut-big">
-          {h ? h.n : without}
-        </text>
-        <text x="80" y="94" textAnchor="middle" className="donut-small">
-          {h ? (h.n === 1 ? "person" : "people") : `of ${total} without blood`}
-        </text>
-      </svg>
-      <figcaption className="donut-key">
-        {arcs.map((x) => (
-          <span
-            key={x.a}
-            onMouseEnter={() => setHover(x.a)}
-            onMouseLeave={() => setHover(null)}
-          >
-            <i style={{ background: AGE_COLOR[x.a] }} />
-            <b>{x.n}</b> {label(x.a)}
-            {x.lost > 0 && <small> · {x.lost} without</small>}
-          </span>
-        ))}
-      </figcaption>
-    </figure>
-  );
-}
+/** Day N of the window as a calendar date from today, e.g. "Mon 10 Nov". */
+const dayToDate = (day: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() + Math.max(0, Math.floor(day)));
+  return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+};
 
 function CrisisResult({ res, stale }: { res: CrisisResponse; stale: boolean }) {
-  const ages = AGE_ORDER.filter((a) => res.example_counts[a] > 0).map((a) => {
-    const n = res.example_counts[a];
-    return `${n} ${n === 1 ? AGE_SINGULAR[a] : res.age_group_labels[a].replace(/(\d)-(\d)/g, "$1–$2")}`;
-  });
   const span = fmtWindow(res.days).replace(/ \(.*\)$/, "");
-  const verdictText =
-    res.verdict === "enough"
-      ? `${res.country} has enough blood`
-      : res.verdict === "at_risk"
-        ? `${res.country} might not have enough blood`
-        : `${res.country} does not have enough blood`;
-  // With "crisis patients first", coping depends on holding blood back from others.
-  const enoughTail = res.crisis_first
-    ? " if hospitals put these patients first."
-    : " at the rate it collects blood.";
-  const shortTail = res.crisis_first
-    ? " even with crisis patients put first, because of the rate it collects blood"
-    : " because of the rate it collects blood";
+  const without = res.example.filter((p) => !p.served).length;
   const groups = res.by_group.filter((g) => g.share_of_sims_with_patients > 0.05);
   const short = new Set(res.lacking);
   const risky = new Set(res.at_risk);
-  // When no single group crosses the thresholds, still name the one most often short.
-  const worst = [...groups].sort((a, b) => b.p_short - a.p_short)[0];
-  const showWorst =
-    res.verdict !== "enough" && !res.lacking.length && !res.at_risk.length && worst && worst.p_short > 0;
-  const oNeg = res.by_group.find((g) => g.blood_group === "O-");
-  const chip = (g: string, cls: string) => (
-    <span key={g} className={`chip ${cls} sim-chip`}>
-      {groupLabel(g)}
-    </span>
-  );
+  // Most urgent first: earliest deadline, then most donors.
+  const plan = [...res.by_group]
+    .filter((g) => g.donors_to_cover > 0)
+    .sort(
+      (a, b) =>
+        (a.deadline_day ?? Infinity) - (b.deadline_day ?? Infinity) ||
+        b.donors_to_cover - a.donors_to_cover,
+    );
+  const firstDeadline = plan.find((g) => g.deadline_day !== null)?.deadline_day ?? null;
+  const weeks = res.days / 7;
+  const ageLabel = (a: string, n: number) =>
+    n === 1 ? AGE_SINGULAR[a] : res.age_group_labels[a].replace(/(\d)-(\d)/g, "$1–$2");
+  const who = AGE_ORDER.filter((a) => res.example_counts[a] > 0).map((a) => {
+    const n = res.example_counts[a];
+    const lost = res.example.filter((p) => p.age_group === a && !p.served).length;
+    return { a, n, lost };
+  });
+  // Recruit-by date: PROCESSING_DAYS before the shortage it covers.
+  const byWhen = (day: number | null) => {
+    const by = (day ?? res.days) - PROCESSING_DAYS;
+    return by < 1 ? "now" : `by ${dayToDate(by)}`;
+  };
+
+  const headline =
+    res.verdict === "enough" ? "Enough blood" : res.verdict === "at_risk" ? "Might run short" : "Not enough blood";
+  const because = res.crisis_first
+    ? res.verdict === "enough"
+      ? "if hospitals put these patients first"
+      : "even with crisis patients put first"
+    : "at today's collection rate";
+  const firstDay = res.first_short_day;
+  const noShortage = firstDay === null || res.share_runs_with_shortage < 0.1;
 
   return (
     <div className={`sim-result verdict-${res.verdict} ${stale ? "is-stale" : ""}`} aria-live="polite">
-      {stale && <p className="sim-stale">Settings changed. Run the simulation again to update.</p>}
-      <p className="sim-verdict">
-        For <b>{res.people} {res.people === 1 ? "person" : "people"}</b>
-        {ages.length > 0 && <> ({listJoin(ages)})</>} in crisis over <b>{span}</b>,{" "}
-        <b className="sim-verdict-word">{verdictText}</b>
-        {res.verdict === "enough" ? (
-          <>{enoughTail}</>
+      {stale && <p className="sim-stale">Settings changed. Run again to update.</p>}
+
+      <div className="sim-banner">
+        <p className="sim-banner-head">{headline}</p>
+        <p className="sim-banner-sub">
+          for <b>{res.people}</b> {res.people === 1 ? "person" : "people"} in crisis over{" "}
+          <b>{span}</b> in {res.country}, {because}.
+        </p>
+      </div>
+
+      <div className="sim-tiles">
+        <div className="sim-tile">
+          <span className="sim-tile-k">Go without blood</span>
+          <span className="sim-tile-v">
+            {without}
+            <small> of {res.people}</small>
+          </span>
+          <span className="sim-tile-n">in a typical run</span>
+        </div>
+        <div className="sim-tile">
+          <span className="sim-tile-k">First shortage</span>
+          <span className="sim-tile-v">{noShortage ? "None" : dayToDate(firstDay!)}</span>
+          <span className="sim-tile-n">
+            {noShortage
+              ? "in 9 of 10 runs"
+              : Math.floor(firstDay!) < 1
+                ? "today"
+                : `in ${Math.floor(firstDay!)} day${Math.floor(firstDay!) === 1 ? "" : "s"}`}
+          </span>
+        </div>
+        <div className="sim-tile">
+          <span className="sim-tile-k">Everyone covered</span>
+          <span className="sim-tile-v">{pct(res.p_all_served)}</span>
+          <span className="sim-tile-n">of {fmt(res.draws)} runs</span>
+        </div>
+        <div className={`sim-tile ${res.donors_to_cover_total > 0 ? "is-action" : ""}`}>
+          <span className="sim-tile-k">Donors to recruit</span>
+          <span className="sim-tile-v">{fmt(res.donors_to_cover_total)}</span>
+          <span className="sim-tile-n">
+            {res.donors_to_cover_total > 0 ? byWhen(firstDeadline) : "none needed"}
+          </span>
+        </div>
+      </div>
+
+      <div className="sim-todo">
+        <h3 className="sim-h">What to do</h3>
+        {plan.length === 0 ? (
+          <p>
+            <b>No donation drive needed</b> for this scenario. Keep regular donors coming in.
+          </p>
         ) : (
           <>
-            {shortTail}
-            {res.lacking.length > 0 && <>. Short of {res.lacking.map((g) => chip(g, "chip-critical"))}</>}
-            {res.at_risk.length > 0 && (
-              <>
-                {res.lacking.length > 0 ? "; at risk: " : ". At risk: "}
-                {res.at_risk.map((g) => chip(g, "chip-low"))}
-              </>
-            )}
-            {showWorst && <>. Most often short: {chip(worst.blood_group, "chip-low")}</>}.
+            <p className="sim-todo-lead">
+              Recruit <b>{fmt(res.donors_to_cover_total)} donors</b>, starting with{" "}
+              <b>{groupLabel(plan[0].blood_group)}</b> {byWhen(plan[0].deadline_day)}. This
+              covers the gap in {Math.round(res.cover_share * 10)} of 10 runs, allowing{" "}
+              {PROCESSING_DAYS} days to test and process each donation.
+            </p>
+            <ol className="sim-plan">
+              {plan.map((g, i) => (
+                <li key={g.blood_group} className={i === 0 ? "is-first" : ""}>
+                  <span className="sim-plan-g">{groupLabel(g.blood_group)}</span>
+                  <span className="sim-plan-n">
+                    <b>{fmt(g.donors_to_cover)}</b> donor{g.donors_to_cover === 1 ? "" : "s"}
+                    {weeks >= 2 && (
+                      <small> · about {Math.max(1, Math.ceil(g.donors_to_cover / weeks))} a week</small>
+                    )}
+                  </span>
+                  <span className="sim-plan-d">{byWhen(g.deadline_day)}</span>
+                </li>
+              ))}
+            </ol>
           </>
         )}
-      </p>
-      <p className="sim-odds">
-        Everyone got blood in <b>{pct(res.p_all_served)}</b> of {fmt(res.draws)} simulations.
         {res.o_neg_fallback && (
-          <>
-            {" "}
-            {res.o_neg_patients_helped >= 0.95 ? (
-              <>
-                O− covered about <b>{Math.round(res.o_neg_patients_helped)}</b>{" "}
-                {Math.round(res.o_neg_patients_helped) === 1 ? "patient" : "patients"} a run whose
-                own group had run out ({fmtRate(res.o_neg_given_units.p50)} units).
-              </>
-            ) : res.o_neg_patients_helped >= 0.005 ? (
-              <>
-                O− stepped in for a patient whose own group had run out in about{" "}
-                <b>{pct(Math.min(res.o_neg_patients_helped, 1))}</b> of runs.
-              </>
-            ) : (
-              <>
-                O− could not help:
-                {oNeg?.runs_dry_after_days != null
-                  ? ` it is the first group to run out (after about ${fmtDays(oNeg.runs_dry_after_days)} days of normal use).`
-                  : " no other group ran out while O− still had stock."}
-              </>
-            )}
-          </>
+          <p className="sim-note">
+            {res.o_neg_patients_helped >= 0.005
+              ? `O− covered someone whose own group ran out in about ${pct(Math.min(res.o_neg_patients_helped, 1))} of runs.`
+              : "O− could not help: it runs out first."}
+          </p>
         )}
         {res.crisis_first && res.routine_displaced_units.p50 >= 0.5 && (
-          <>
-            {" "}
-            To do it, about <b>{fmtRate(res.routine_displaced_units.p50)}</b> units were held back
-            from other hospital patients.
-          </>
+          <p className="sim-note">
+            This takes about {fmtRate(res.routine_displaced_units.p50)} units from other hospital
+            patients.
+          </p>
         )}
+        {plan.length > 0 && <AppealPanel res={res} plan={plan} byWhen={byWhen} />}
+      </div>
+
+      <p className="sim-who">
+        <span className="sim-h">Who is in crisis</span>
+        {who.map((x) => (
+          <span key={x.a} className="sim-who-item">
+            <b>{x.n}</b> {ageLabel(x.a, x.n)}
+            {x.lost > 0 && <em> · {x.lost} without</em>}
+          </span>
+        ))}
       </p>
 
-      <div className="sim-grid">
-        <div>
-          <h3 className="sim-h">By blood group</h3>
-          <table className="rates sim-table">
-            <thead>
-              <tr>
-                <th>Group</th>
-                <th>Needs</th>
-                <th>Short</th>
-                <th title="Share of simulations where someone with this group went without">Chance</th>
-                <th>Collected vs normal use a day</th>
-              </tr>
-            </thead>
-            <tbody>
-              {groups.map((g) => (
+      <h3 className="sim-h">By blood group</h3>
+      <div className="sim-table-wrap">
+        <table className="rates sim-table">
+          <thead>
+            <tr>
+              <th>Group</th>
+              <th title="Share of runs where someone with this group went without">Chance short</th>
+              <th>Donors to recruit</th>
+              <th>Recruit by</th>
+              <th>Collected a day</th>
+              <th>Used a day</th>
+              <th>Stock runs out</th>
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map((g) => {
+              const deficit = g.routine_use_per_day > g.collected_per_day;
+              return (
                 <tr key={g.blood_group} className={short.has(g.blood_group) ? "is-short" : ""}>
                   <th scope="row">{groupLabel(g.blood_group)}</th>
-                  <td>{fmtRate(g.units_needed.p50)}</td>
-                  <td>{g.units_short.p50 >= 0.05 ? fmtRate(g.units_short.p50) : "–"}</td>
                   <td>
                     <span
                       className={`chip ${
@@ -1758,30 +1742,147 @@ function CrisisResult({ res, stale }: { res: CrisisResponse; stale: boolean }) {
                       {pct(g.p_short)}
                     </span>
                   </td>
-                  <td>
-                    {fmtRate(g.collected_per_day)} vs {fmtRate(g.routine_use_per_day)}
-                    <small className="rates-range">
-                      {g.runs_dry_after_days === null
-                        ? `stock of ${fmtRate(g.stock_at_start)} holds`
-                        : `stock of ${fmtRate(g.stock_at_start)} runs dry in ${fmtDays(g.runs_dry_after_days)} days`}
-                    </small>
-                  </td>
+                  <td>{g.donors_to_cover > 0 ? <b>{fmt(g.donors_to_cover)}</b> : "–"}</td>
+                  <td>{g.donors_to_cover > 0 ? byWhen(g.deadline_day).replace(/^by /, "") : "–"}</td>
+                  <td>{fmtRate(g.collected_per_day)}</td>
+                  <td className={deficit ? "is-deficit" : ""}>{fmtRate(g.routine_use_per_day)}</td>
+                  <td>{g.runs_dry_after_days === null ? "holds" : `in ${fmtDays(g.runs_dry_after_days)} days`}</td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div>
-          <h3 className="sim-h">Who is in crisis</h3>
-          <AgeDonut res={res} />
-        </div>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
 
-      <p className="sim-scope">
-        This run covers sickle cell crises only and assumes nothing else
-        happens: no other emergencies, outbreaks or donation drives.
-      </p>
+      <p className="sim-scope">Sickle cell crises only. Assumes nothing else happens.</p>
+    </div>
+  );
+}
+
+/* ───────────── donor appeal: Gemini (or a template) writes it, the charity sends it ───────────── */
+
+type Channel = "whatsapp" | "sms" | "email";
+
+function AppealPanel({
+  res,
+  plan,
+  byWhen,
+}: {
+  res: CrisisResponse;
+  plan: CrisisResponse["by_group"];
+  byWhen: (day: number | null) => string;
+}) {
+  const [org, setOrg] = useState("");
+  const [appeal, setAppeal] = useState<AppealResponse | null>(null);
+  const [text, setText] = useState<Record<Channel, string>>({ whatsapp: "", sms: "", email: "" });
+  const [channel, setChannel] = useState<Channel>("whatsapp");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // 0 = first draft; each Rewrite asks for a fresh version (variant 1, 2, ...).
+  const [variant, setVariant] = useState(0);
+
+  // A new simulation result means a new appeal.
+  useEffect(() => {
+    setAppeal(null);
+    setError(null);
+    setVariant(0);
+  }, [res]);
+
+  const draft = (v: number) => {
+    setBusy(true);
+    setError(null);
+    draftAppeal({
+      country: res.country,
+      people: res.people,
+      days: res.days,
+      verdict: res.verdict,
+      donors: Object.fromEntries(plan.map((g) => [groupLabel(g.blood_group), g.donors_to_cover])),
+      deadlines: Object.fromEntries(plan.map((g) => [groupLabel(g.blood_group), byWhen(g.deadline_day)])),
+      organisation: org.trim() || undefined,
+      patients_by_age: res.example_counts,
+      variant: v,
+    })
+      .then((a) => {
+        setVariant(v);
+        setAppeal(a);
+        setText({ whatsapp: a.whatsapp, sms: a.sms, email: a.email_body });
+      })
+      .catch((e) => setError(String(e)))
+      .finally(() => setBusy(false));
+  };
+
+  const current = text[channel];
+  const enc = encodeURIComponent;
+  const sendHref =
+    channel === "whatsapp"
+      ? `https://wa.me/?text=${enc(current)}`
+      : channel === "sms"
+        ? `sms:?&body=${enc(current)}`
+        : `mailto:?subject=${enc(appeal?.email_subject ?? "")}&body=${enc(current)}`;
+  const copy = () => {
+    navigator.clipboard?.writeText(current).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
+  return (
+    <div className="appeal">
+      {!appeal ? (
+        <div className="appeal-start">
+          <input
+            className="appeal-org"
+            value={org}
+            onChange={(e) => setOrg(e.target.value)}
+            placeholder="Your charity's name (optional)"
+            maxLength={80}
+          />
+          <button className="btn" onClick={() => draft(0)} disabled={busy}>
+            {busy ? "Writing…" : "✉ Draft donor appeal"}
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="appeal-tabs" role="tablist">
+            {(["whatsapp", "sms", "email"] as Channel[]).map((c) => (
+              <button
+                key={c}
+                role="tab"
+                aria-selected={channel === c}
+                className={channel === c ? "is-on" : ""}
+                onClick={() => setChannel(c)}
+              >
+                {c === "whatsapp" ? "WhatsApp" : c === "sms" ? "SMS" : "Email"}
+              </button>
+            ))}
+            <span className={`appeal-src ${appeal.source}`}>
+              {appeal.source === "gemini" ? "Written by Gemini" : "Template"}
+            </span>
+          </div>
+          {channel === "email" && <p className="appeal-subject">Subject: {appeal.email_subject}</p>}
+          <textarea
+            className="appeal-text"
+            value={current}
+            onChange={(e) => setText({ ...text, [channel]: e.target.value })}
+            rows={channel === "sms" ? 3 : 9}
+          />
+          <div className="appeal-actions">
+            <a className="btn" href={sendHref} target="_blank" rel="noreferrer">
+              Send via {channel === "whatsapp" ? "WhatsApp" : channel === "sms" ? "SMS" : "email"} →
+            </a>
+            <button className="btn btn-ghost" onClick={copy}>
+              {copied ? "Copied" : "Copy"}
+            </button>
+            <button className="btn btn-ghost" onClick={() => draft(variant + 1)} disabled={busy}>
+              {busy ? "Writing…" : "Rewrite"}
+            </button>
+            {channel === "sms" && <small className="appeal-count">{current.length} characters</small>}
+          </div>
+        </>
+      )}
+      {error && <div className="alert">Couldn't draft the appeal: {error}</div>}
     </div>
   );
 }

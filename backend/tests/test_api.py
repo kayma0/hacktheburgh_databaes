@@ -159,6 +159,41 @@ def test_crisis_options_only_ever_help_crisis_patients():
     assert first["routine_displaced_units"]["p50"] > 0
 
 
+def test_crisis_recruitment_target_closes_the_gap():
+    q = {"country": "Ghana", "people": 25, "days": 30, "seed": 11}
+    b = client.get("/api/crisis", params=q).json()
+    assert b["donors_to_cover_total"] == sum(g["donors_to_cover"] for g in b["by_group"])
+    assert b["first_short_day"] is not None and 0 <= b["first_short_day"] <= 30
+    # Groups that are short in most runs need donors; the target is at least the units short.
+    for g in b["by_group"]:
+        if g["blood_group"] in b["lacking"]:
+            assert g["donors_to_cover"] >= g["units_short"]["p50"]
+    za = client.get("/api/crisis", params={"country": "South Africa", "people": 5, "days": 3, "seed": 2}).json()
+    assert za["verdict"] == "enough" and za["donors_to_cover_total"] == 0
+
+
+def test_appeal_template_without_api_key(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    body = {"country": "Ghana", "people": 25, "days": 30, "verdict": "not_enough",
+            "donors": {"O+": 21, "O-": 5, "AB-": 0}, "deadlines": {"O-": "by 10 Nov"}}
+    r = client.post("/api/appeal", json=body)
+    assert r.status_code == 200
+    a = r.json()
+    assert a["source"] == "template"
+    assert "O+" in a["whatsapp"] and "21" in a["whatsapp"] and "by 10 Nov" in a["whatsapp"]
+    assert a["whatsapp"].startswith("URGENT APPEAL") and a["sms"].startswith("URGENT:")
+    assert not any(ord(ch) > 0x2FFF for ch in a["whatsapp"] + a["sms"] + a["email_body"])  # no emoji
+    assert "AB-" not in a["whatsapp"]  # groups needing nobody are left out
+    assert len(a["sms"]) <= 300 and a["email_subject"]
+
+
+def test_crisis_groups_have_deadlines():
+    b = client.get("/api/crisis", params={"country": "Ghana", "people": 25, "days": 30, "seed": 11}).json()
+    for g in b["by_group"]:
+        if g["blood_group"] in b["lacking"]:
+            assert g["deadline_day"] is not None and 0 <= g["deadline_day"] <= 30
+
+
 def test_crisis_rejects_out_of_range():
     assert client.get("/api/crisis", params={"country": "Ghana", "people": 51}).status_code == 422
     assert client.get("/api/crisis", params={"country": "Ghana", "days": 366}).status_code == 422

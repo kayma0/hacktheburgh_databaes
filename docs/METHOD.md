@@ -259,10 +259,30 @@ The reservoir page's two sliders choose **N people in crisis** (1-50) and a **ti
    without blood, total need nearest the median) by age group, and the pool picture rings
    the patients picked in it.
 
+5. **What to do**: for each blood group, donors to recruit before the window =
+   ceil(90th percentile of that group's shortfall in units across all draws ÷ ((1 − 0.156
+   discard) × (1 − 0.076 deferral))), using WHO AFRO 2022 averages and one unit per
+   donation. Adding those units would cover the gap in about 9 of 10 runs (approximate:
+   extra stock also lets later patients be served). Also reported: the median day the
+   first patient goes without (in runs where anyone does).
+   Each group also gets a deadline: the median day its first patient goes without (in
+   runs where one does). The page asks for donors 2 days before that, to allow for testing
+   and processing donated blood (ASSUMPTION: typically 1-2 days), lists groups most urgent
+   first, and for windows of 2+ weeks also shows donors a week.
+6. **Donor appeal** (`backend/app/appeal.py`, `POST /api/appeal`): the plan (groups,
+   donor counts, deadlines, country, optional charity name) is turned into a WhatsApp
+   message, an SMS (≤ 300 characters) and an email. With `GEMINI_API_KEY` set, Gemini
+   writes them from those facts only (told not to invent statistics, places, dates,
+   numbers or medical claims; donation voluntary, unpaid, via the national blood
+   service); otherwise, or if Gemini fails or takes over 15 s, a fixed template is used.
+   The page sends them through WhatsApp / SMS / email share links; the charity picks the
+   recipients. Nothing is sent automatically.
+
 The page states that each run covers sickle cell crises only and assumes nothing else
-happens (no other emergencies, outbreaks or donation drives). The result shows a table by
-blood group and a donut of the people in crisis in one typical run, by age group, with
-the number who went without blood.
+happens (no other emergencies, outbreaks or donation drives). The result shows a verdict, four headline
+numbers (people without blood in a typical run, first shortage day, share of runs with
+everyone covered, donors to recruit), the recruitment target by group, who is in crisis
+by age, and a table by blood group.
 
 Caveats: the global blood-group distribution gives more AB+, A- and B- patients than
 African donor mixes, which pushes those groups toward shortage; everyone in crisis needs

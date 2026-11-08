@@ -41,8 +41,10 @@ rules: "Use O− when a group runs out" (the universal donor covers patients who
 empty) and "Crisis patients first" (other hospital patients wait); "Reset to default blood
 rates" restores the defaults. The answer reads like "For 25 people (8 under-5s, 4 children
 aged 5–9, 9 teens and 4 adults) over 30 days, Ghana does not have enough blood because of
-the rate it collects blood. Short of O+, O−…", with a table by blood group and a donut of
-who is in crisis by age. Each run covers sickle cell crises only and assumes nothing else
+the rate it collects blood. Short of O+, O−…", with headline numbers, a dated plan of how many
+donors of each blood group to recruit and by when, and a table by blood group. "Draft
+donor appeal" turns the plan into a WhatsApp, SMS or email message (written by Gemini when
+`GEMINI_API_KEY` is set in `.env`, otherwise a template) that opens ready to send. Each run covers sickle cell crises only and assumes nothing else
 happens. Collections are trend-fitted to WHO
 2014–2018 and newer national figures and projected to this year (`backend/app/trends.py`).
 

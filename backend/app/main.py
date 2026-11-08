@@ -12,9 +12,12 @@ from . import crisis as crisis_mod
 from . import hotspots as hotspots_mod
 from . import model
 from . import reservoir as reservoir_mod
+from .appeal import draft_appeal
 from .briefing import get_briefing
 from .data_loader import load_data
 from .schemas import (
+    AppealRequest,
+    AppealResponse,
     BriefingRequest,
     BriefingResponse,
     CalibrationResponse,
@@ -134,6 +137,13 @@ def crisis(
             country, people, days, run_seed, o_neg_fallback, crisis_first)
     except KeyError:
         raise HTTPException(status_code=404, detail=f"No data for country: {country}")
+
+
+@app.post("/api/appeal", response_model=AppealResponse)
+def appeal(req: AppealRequest):
+    """A donor appeal (WhatsApp, SMS, email) from a simulator result. Gemini writes it when
+    GEMINI_API_KEY is set; otherwise a template, so it always works."""
+    return draft_appeal(req)
 
 
 @app.get("/api/reservoir", response_model=ReservoirResponse)

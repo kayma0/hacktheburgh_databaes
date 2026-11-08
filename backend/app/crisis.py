@@ -66,6 +66,13 @@ AGE_GROUP_LABELS = {
 # Same rule as scripts/build_data.py (FEMALE_DOSE_FROM_AGE).
 FEMALE_DOSE_FROM_AGE = ("15-19 years", "20+ years")
 
+# Turning a shortfall into a recruitment target. WHO AFRO 2022 survey: 7.6% of donor
+# candidates deferred, 15.6% of collected units discarded; one donation = one unit.
+DONOR_DEFERRAL = 0.076
+DISCARD_TYPICAL = 0.156
+# Recruit enough to cover the shortfall in this share of simulations.
+COVER_SHARE = 0.9
+
 # Verdict thresholds: share of simulations in which every patient was served.
 ENOUGH_AT, AT_RISK_AT = 0.9, 0.5
 
@@ -202,6 +209,10 @@ def simulate_crisis(
 
     unserved = (~served).sum(axis=1)
     all_served = unserved == 0
+    # Day the first patient goes without, in runs where anyone does.
+    t_first = np.where(~served, t_crisis, np.inf).min(axis=1)
+    any_short = np.isfinite(t_first)
+    donors_per_unit = 1.0 / ((1 - DISCARD_TYPICAL) * (1 - DONOR_DEFERRAL))
 
     by_group = []
     for gi, t in enumerate(BLOOD_TYPES):
@@ -213,6 +224,9 @@ def simulate_crisis(
         # Needs and shortfall: only over simulations that picked someone of this group.
         need_h = need[has] if has.any() else np.zeros(1)
         short_h = short[has] if has.any() else np.zeros(1)
+        # Deadline: median day this group's first patient goes without, in runs where one does.
+        g_first = np.where(in_g & ~served, t_crisis, np.inf).min(axis=1)
+        g_hit = np.isfinite(g_first)
         # Day the group's stock runs dry from normal use alone (inf if it never does).
         dry = np.where(net_g[:, gi] < 0, stock_g[:, gi] / np.maximum(-net_g[:, gi], 1e-9), np.inf)
         by_group.append({
@@ -226,6 +240,10 @@ def simulate_crisis(
             "routine_use_per_day": float(np.median(routine_g[:, gi])),
             "stock_at_start": float(np.median(stock_g[:, gi])),
             "runs_dry_after_days": float(np.median(dry)) if np.isfinite(np.median(dry)) else None,
+            # Extra donors of this group to recruit before the window so that the shortfall
+            # is covered in COVER_SHARE of simulations.
+            "donors_to_cover": int(np.ceil(np.quantile(short, COVER_SHARE) * donors_per_unit - 1e-9)),
+            "deadline_day": float(np.median(g_first[g_hit])) if g_hit.any() else None,
         })
 
     # A typical simulation to describe in words: unserved count at the median, then the
@@ -287,4 +305,8 @@ def simulate_crisis(
         "o_neg_given_units": _pct(o_neg_given),
         "o_neg_patients_helped": float(o_neg_helped.mean()),
         "routine_displaced_units": _pct(displaced),
+        "first_short_day": float(np.median(t_first[any_short])) if any_short.any() else None,
+        "share_runs_with_shortage": float(any_short.mean()),
+        "donors_to_cover_total": int(sum(g["donors_to_cover"] for g in by_group)),
+        "cover_share": COVER_SHARE,
     }

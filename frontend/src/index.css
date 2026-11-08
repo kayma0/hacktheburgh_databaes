@@ -2341,39 +2341,6 @@ input[type="range"]:focus-visible {
   color: var(--firebrick);
   margin: 0 0 8px;
 }
-.sim-verdict {
-  font-family: var(--display);
-  font-size: clamp(19px, 2.1vw, 24px);
-  line-height: 1.45;
-  margin: 0 0 8px;
-  padding: 14px 18px;
-  border-left: 5px solid var(--firebrick);
-  background: var(--paper-2);
-  border-radius: 0 4px 4px 0;
-}
-.verdict-enough .sim-verdict {
-  border-left-color: #5a7d4f;
-  background: #eef3ea;
-}
-.verdict-not_enough .sim-verdict-word {
-  color: var(--oxblood);
-}
-.sim-chip {
-  margin: 0 3px;
-  vertical-align: 2px;
-  font-size: 12px;
-}
-.sim-odds {
-  font-size: 15px;
-  color: var(--ink-soft);
-  margin: 0 0 18px;
-}
-.sim-grid {
-  display: grid;
-  grid-template-columns: 1.15fr 1fr;
-  gap: 28px;
-  align-items: start;
-}
 .sim-h {
   font-family: var(--mono);
   font-size: 11px;
@@ -2397,12 +2364,9 @@ input[type="range"]:focus-visible {
   .sim-controls {
     grid-template-columns: 1fr;
   }
-  .sim-grid {
-    grid-template-columns: 1fr;
   }
-}
 
-/* ── simulator: options, actions, donut ─────────────────────────────── */
+/* ── simulator: options, actions ─────────────────────────────── */
 .sim-options {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -2494,57 +2458,6 @@ input[type="range"]:focus-visible {
   opacity: 0.45;
   cursor: default;
 }
-.donut {
-  margin: 0;
-  display: grid;
-  grid-template-columns: minmax(150px, 190px) 1fr;
-  gap: 18px;
-  align-items: center;
-}
-.donut svg {
-  width: 100%;
-  height: auto;
-}
-.donut path {
-  stroke: var(--card);
-  stroke-width: 0;
-  transition: opacity 0.15s;
-  cursor: default;
-}
-.donut path.is-dim {
-  opacity: 0.35;
-}
-.donut-big {
-  font-family: var(--display);
-  font-weight: 800;
-  font-size: 30px;
-  fill: var(--ink);
-}
-.donut-small {
-  font-family: var(--sans);
-  font-size: 9.5px;
-  fill: var(--ink-soft);
-}
-.donut-key {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 14px;
-}
-.donut-key span {
-  cursor: default;
-}
-.donut-key i {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
-  margin-right: 8px;
-  vertical-align: -1px;
-}
-.donut-key small {
-  color: var(--ink-soft);
-}
 .sim-scope {
   margin: 18px 0 0;
   font-size: 13px;
@@ -2556,12 +2469,300 @@ input[type="range"]:focus-visible {
     grid-template-columns: 1fr;
   }
 }
-@media (max-width: 420px) {
-  .donut {
-    grid-template-columns: 1fr;
-    justify-items: center;
+
+/* ── simulator results: banner, tiles, what to do ───────────────── */
+.sim-banner {
+  border-radius: 6px;
+  padding: 16px 20px;
+  background: var(--oxblood);
+  color: var(--paper);
+}
+.verdict-at_risk .sim-banner {
+  background: #b5651d;
+}
+.verdict-enough .sim-banner {
+  background: #3f6b3a;
+}
+.sim-banner-head {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(26px, 3vw, 34px);
+  line-height: 1.1;
+  margin: 0;
+}
+.sim-banner-sub {
+  margin: 4px 0 0;
+  font-size: 16px;
+  opacity: 0.92;
+}
+.sim-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0 18px;
+}
+.sim-tile {
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--card);
+}
+.sim-tile.is-action {
+  border-color: var(--firebrick);
+  box-shadow: inset 0 3px 0 var(--firebrick);
+}
+.sim-tile-k {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+}
+.sim-tile-v {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 32px;
+  line-height: 1.1;
+  color: var(--ink);
+}
+.sim-tile-v small {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.sim-tile-n {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+.sim-todo {
+  background: var(--paper-2);
+  border-radius: 6px;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+}
+.sim-todo p {
+  margin: 0 0 8px;
+}
+.sim-recruit {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sim-recruit li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 5px 14px;
+}
+.sim-recruit li b {
+  font-family: var(--display);
+  font-size: 16px;
+}
+.sim-recruit li span {
+  font-family: var(--mono);
+  font-weight: 600;
+}
+.sim-recruit li.is-short {
+  border-color: var(--firebrick);
+}
+.sim-recruit li.is-short b {
+  color: var(--oxblood);
+}
+.sim-note {
+  font-size: 13.5px;
+  color: var(--ink-soft);
+}
+.sim-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  margin: 0 0 18px;
+  font-size: 14.5px;
+}
+.sim-who .sim-h {
+  margin: 0 4px 0 0;
+}
+.sim-who em {
+  font-style: normal;
+  color: var(--firebrick);
+}
+@media (max-width: 760px) {
+  .sim-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .donut svg {
-    max-width: 190px;
+}
+
+/* ── reservoir page: top back button, action plan, appeal ───────── */
+.page-back {
+  padding-top: 18px;
+}
+.page-back .btn {
+  padding: 8px 16px;
+  font-size: 14px;
+}
+.sim-todo-lead {
+  font-size: 16.5px;
+}
+.sim-plan {
+  list-style: none;
+  counter-reset: step;
+  padding: 0;
+  margin: 10px 0 6px;
+  display: grid;
+  gap: 6px;
+}
+.sim-plan li {
+  counter-increment: step;
+  display: grid;
+  grid-template-columns: 28px 56px 1fr auto;
+  align-items: baseline;
+  gap: 10px;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+.sim-plan li::before {
+  content: counter(step);
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.sim-plan li.is-first {
+  border-color: var(--firebrick);
+  box-shadow: inset 4px 0 0 var(--firebrick);
+}
+.sim-plan-g {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 18px;
+  color: var(--oxblood);
+}
+.sim-plan-n b {
+  font-family: var(--mono);
+  font-size: 16px;
+}
+.sim-plan-n small {
+  color: var(--ink-soft);
+}
+.sim-plan-d {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.sim-table-wrap {
+  overflow-x: auto;
+}
+.sim-table td.is-deficit {
+  color: var(--firebrick);
+  font-weight: 600;
+}
+.sim-table td,
+.sim-table th {
+  white-space: nowrap;
+}
+.appeal {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--rule);
+}
+.appeal-start {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.appeal-org {
+  flex: 1 1 220px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 10px 16px;
+  background: var(--card);
+}
+.appeal-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.appeal-tabs button {
+  border: 1px solid var(--rule);
+  background: var(--card);
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+.appeal-tabs button.is-on {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.appeal-src {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+}
+.appeal-src.gemini {
+  color: #1a5fb4;
+}
+.appeal-subject {
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.appeal-text {
+  width: 100%;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 12px;
+  background: var(--card);
+  font-size: 14.5px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.appeal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.appeal-actions a.btn {
+  text-decoration: none;
+}
+.appeal-count {
+  color: var(--ink-soft);
+  font-family: var(--mono);
+}
+@media (max-width: 560px) {
+  .sim-plan li {
+    grid-template-columns: 22px 44px 1fr;
   }
+  .sim-plan-d {
+    grid-column: 3;
+  }
+}
+
+/* Simulator header has no key badge: stack title and subtitle. */
+.sim .panel-head {
+  display: block;
+}
+.sim .panel-head p {
+  margin-top: 4px;
 }

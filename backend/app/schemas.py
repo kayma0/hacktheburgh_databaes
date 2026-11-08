@@ -187,6 +187,10 @@ class CrisisGroup(BaseModel):
     stock_at_start: float
     runs_dry_after_days: float | None = Field(
         description="Days until normal use alone empties this group's stock; null if never")
+    donors_to_cover: int = Field(
+        description="Extra donors of this group to recruit before the window (covers 90% of runs)")
+    deadline_day: float | None = Field(
+        description="Median day this group's first patient goes without, where one does")
 
 
 class CrisisTrend(BaseModel):
@@ -230,6 +234,33 @@ class CrisisResponse(BaseModel):
     o_neg_patients_helped: float = Field(description="Mean number of such patients per simulation")
     routine_displaced_units: Percentiles = Field(
         description="Units crisis patients took from other hospital patients (crisis-first on)")
+    first_short_day: float | None = Field(
+        description="Median day the first patient goes without blood, in runs where anyone does")
+    share_runs_with_shortage: float
+    donors_to_cover_total: int
+    cover_share: float
+
+
+class AppealRequest(BaseModel):
+    country: str
+    people: int = Field(ge=1, le=50)
+    days: int = Field(ge=1, le=365)
+    verdict: str
+    donors: dict[str, int] = Field(description="Blood group -> donors to recruit")
+    deadlines: dict[str, str] = Field(
+        default_factory=dict, description="Blood group -> 'by 17 Nov' style deadline")
+    organisation: str | None = Field(None, max_length=80)
+    patients_by_age: dict[str, int] = Field(
+        default_factory=dict, description="under_5 | children | teens | adults -> count")
+    variant: int = Field(0, ge=0, le=50, description="0 = first draft; 1, 2, ... = rewrites")
+
+
+class AppealResponse(BaseModel):
+    whatsapp: str
+    sms: str = Field(description="Short version, about 300 characters")
+    email_subject: str
+    email_body: str
+    source: str = Field(description="gemini | template")
 
 
 class BriefingRequest(BaseModel):
