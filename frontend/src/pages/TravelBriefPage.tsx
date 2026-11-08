@@ -88,13 +88,7 @@ export default function TravelBriefPage({
   return (
     <>
       <section className="hero plan-hero">
-        <p className="eyebrow">
-          Before you travel <span className="dot-sep">·</span>
-          <span className="live">
-            {shown?.fallback_used ? "fixed checklist" : "written by Gemini"}, verify with
-            government's official advice
-          </span>
-        </p>
+        <p className="eyebrow">Before you travel</p>
         <div className="hero-place">
           A trip checklist for
           <em className="hero-country">{c || "…"}</em>
@@ -128,9 +122,7 @@ export default function TravelBriefPage({
         ))}
         {shown && (
           <p className="plan-fine">
-            {shown.fallback_used
-              ? "This is a fixed starter list (no Gemini answer was available). "
-              : "Written by Gemini for this country, so it can be wrong or out of date. "}
+            {shown.fallback_used ? "" : "Written by Gemini for this country, so it can be wrong or out of date. "}
             {shown.grounded
               ? "The current situation is drawn from the UK government's published advice, which is written for British passport holders; if your team holds other passports, check your own government's advice too."
               : "No government advice could be loaded for this country, so check the links below yourself."}

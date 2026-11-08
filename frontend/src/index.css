@@ -1860,7 +1860,7 @@ input[type="range"]:focus-visible {
 }
 .plan-assume-list li {
   display: grid;
-  grid-template-columns: minmax(220px, 1.2fr) auto 2fr;
+  grid-template-columns: minmax(220px, 1.2fr) 96px 2fr;
   gap: 12px;
   align-items: baseline;
   padding: 9px 0;
@@ -2218,4 +2218,132 @@ input[type="range"]:focus-visible {
 }
 .who-out:hover {
   border-bottom-color: var(--salmon);
+}
+
+/* ── alignment pass ─────────────────────────────── */
+/* Headings are centred, so the button rows under them are centred too. */
+.hero-actions,
+.plan-actions {
+  justify-content: center;
+}
+/* The footer rule runs exactly as wide as the content above it (it used to be 56px wider). */
+.foot {
+  position: relative;
+  border-top: 0;
+}
+.foot::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 28px;
+  right: 28px;
+  border-top: 1px solid var(--rule);
+}
+@media (max-width: 560px) {
+  .foot::before {
+    left: 16px;
+    right: 16px;
+  }
+}
+
+/* Grid/flex children default to min-width:auto, so one wide table or long word can stretch a
+   page sideways on a phone. Let panels shrink; tables scroll inside their own wrap. */
+.panel,
+.plan-result > * {
+  min-width: 0;
+}
+.plan-table-wrap {
+  max-width: 100%;
+}
+
+/* Phones: button rows stack, full width, evenly spaced. */
+@media (max-width: 560px) {
+  .hero-actions,
+  .plan-actions,
+  .appeal-start {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .hero-actions .btn,
+  .plan-actions .btn,
+  .appeal-start .btn,
+  .appeal-start .outreach-org {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+  .appeal-start .outreach-org {
+    flex: none;
+    height: auto;
+    text-align: left;
+  }
+}
+
+/* Big monitors: scale the app up together so it does not sit small in empty space. */
+@media (min-width: 2200px) {
+  .shell {
+    zoom: 1.25;
+  }
+}
+@media (min-width: 3000px) {
+  .shell {
+    zoom: 1.6;
+  }
+}
+
+/* ── requested tweaks ─────────────────────────────── */
+/* map page: logo and account sit at the far edges of the bar */
+.mast.is-wide .mast-inner {
+  max-width: none;
+  padding-left: 20px;
+  padding-right: 24px;
+}
+/* breathing room between the charity name and "Sign out" */
+.who {
+  gap: 22px;
+}
+/* blood-group chips in the "Push for ..." sentence are spaced out */
+.sim-chip {
+  margin: 3px 0 3px 8px;
+}
+
+/* Account area in the header: the signed-in name, a clear gap, then "Sign out". */
+.who {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  min-width: 0;
+}
+.who-org {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.who-out {
+  flex: none;
+  white-space: nowrap;
+}
+@media (max-width: 560px) {
+  .who {
+    gap: 14px;
+  }
+  .who-org {
+    max-width: 92px;
+    font-size: 14px;
+  }
+  .mast .brand {
+    gap: 8px;
+  }
+  .brand-mark {
+    width: 38px;
+    height: 32px;
+  }
+  .brand-word {
+    font-size: 19px;
+  }
+}
+/* only the very narrowest phones drop the name, so Sign out never gets squeezed */
+@media (max-width: 380px) {
+  .who-org {
+    display: none;
+  }
 }

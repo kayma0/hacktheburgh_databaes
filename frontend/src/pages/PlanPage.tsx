@@ -207,7 +207,7 @@ export default function PlanPage({
                     {a.label}
                     {a.value !== null && <b> {PERCENT_KEYS.has(a.key) ? pct(a.value) : fmtRate(a.value)}</b>}
                   </span>
-                  <SourceTag assumed={a.is_assumption} title={a.source} />
+                  {a.is_assumption ? <span aria-hidden /> : <SourceTag assumed={false} title={a.source} />}
                   <small>{a.source}</small>
                 </li>
               ))}
@@ -220,20 +220,7 @@ export default function PlanPage({
       )}
 
       <div className="hero-actions plan-actions no-print">
-        <button className="btn" onClick={() => window.print()} disabled={!plan}>
-          Print / save as PDF
-        </button>
-        <button
-          className="btn btn-ghost"
-          onClick={() => plan && copy(summaryText(plan, needs, window.location.href), "Summary")}
-          disabled={!plan}
-        >
-          Copy summary
-        </button>
-        <button className="btn btn-ghost" onClick={() => copy(window.location.href, "Link")}>
-          Copy link
-        </button>
-        <button className="btn btn-ghost" onClick={() => onTravel(c)} disabled={!c}>
+        <button className="btn" onClick={() => onTravel(c)} disabled={!c}>
           Before you travel →
         </button>
         {note && <span className="plan-note">{note}</span>}

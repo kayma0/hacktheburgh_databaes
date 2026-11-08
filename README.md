@@ -102,12 +102,12 @@ Auth0 and the database split the work:
 
 Tables (`backend/app/schema.sql`, created automatically on first use):
 
-| Table | What it holds |
-|---|---|
-| `charities` | One row per charity account (its Auth0 user id and name), created on its first request. |
-| `donors` | Name, phone, email, blood type, country, consent to be contacted, date they last gave blood, and the charity they belong to. Demo donors belong to no charity, and every charity sees them. |
-| `outreach` | Every contact and reply (contacted / pledged / declined), with time, channel and charity. On Tiger Data it is a **hypertable** partitioned by time, and "This week: 12 messages sent · 4 pledged" under Reach donors comes from a `time_bucket` query on it (`GET /api/outreach/activity`). |
-| `saved_plans` | Drive plans a charity saved (settings only, never results). |
+| Table         | What it holds                                                                                                                                                                                                                                                                               |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `charities`   | One row per charity account (its Auth0 user id and name), created on its first request.                                                                                                                                                                                                     |
+| `donors`      | Name, phone, email, blood type, country, consent to be contacted, date they last gave blood, and the charity they belong to. Demo donors belong to no charity, and every charity sees them.                                                                                                 |
+| `outreach`    | Every contact and reply (contacted / pledged / declined), with time, channel and charity. On Tiger Data it is a **hypertable** partitioned by time, and "This week: 12 messages sent · 4 pledged" under Reach donors comes from a `time_bucket` query on it (`GET /api/outreach/activity`). |
+| `saved_plans` | Drive plans a charity saved (settings only, never results).                                                                                                                                                                                                                                 |
 
 Without Auth0 configured (local mode) the app has one charity, `local`, and needs no sign-in.
 
@@ -177,8 +177,8 @@ mode). The server only ever trusts the verified token, never the browser; see "D
 above for what it keeps under each charity's Auth0 user id.
 
 1. Create an Auth0 tenant (free tier is enough).
-2. **Applications → Create Application → Single Page Web Applications.** Set *Allowed Callback
-   URLs*, *Allowed Logout URLs* and *Allowed Web Origins* to `http://localhost:5173` (and your
+2. **Applications → Create Application → Single Page Web Applications.** Set _Allowed Callback
+   URLs_, _Allowed Logout URLs_ and _Allowed Web Origins_ to `http://localhost:5173` (and your
    deployed URL). Copy the **Domain** and **Client ID**. For "Continue with Google", enable the
    Google social connection for this application (Authentication → Social).
 3. **APIs → Create API.** Choose any identifier, e.g. `https://sicklesignal/api`; that is the

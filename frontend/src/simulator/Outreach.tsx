@@ -43,7 +43,7 @@ export default function Outreach({ res, needs }: { res: CrisisResponse; needs: N
               maxLength={80}
             />
             <button className="btn" onClick={draft} disabled={busy}>
-              {busy ? "Writing…" : "✉ Draft the appeal"}
+              {busy ? "Writing…" : "Draft the appeal"}
             </button>
           </div>
         ) : (
