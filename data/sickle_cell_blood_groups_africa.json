@@ -1,0 +1,764 @@
+{
+  "title": "ABO/Rh blood group distribution among sickle cell patients in Africa (pooled published studies)",
+  "generated": "2026-11-08",
+  "method": "Counts taken from published tables and summed across studies; probability = pooled count / pooled n; 95% Wilson confidence intervals. Not a continental registry; hospital-based convenience samples.",
+  "results": {
+    "abo_all_studies": {
+      "n": 819,
+      "ranking": [
+        {
+          "rank": 1,
+          "group": "O",
+          "patients": 366,
+          "probability": 0.447,
+          "ci95": [
+            0.413,
+            0.481
+          ]
+        },
+        {
+          "rank": 2,
+          "group": "A",
+          "patients": 217,
+          "probability": 0.265,
+          "ci95": [
+            0.236,
+            0.296
+          ]
+        },
+        {
+          "rank": 3,
+          "group": "B",
+          "patients": 166,
+          "probability": 0.203,
+          "ci95": [
+            0.177,
+            0.232
+          ]
+        },
+        {
+          "rank": 4,
+          "group": "AB",
+          "patients": 70,
+          "probability": 0.085,
+          "ci95": [
+            0.068,
+            0.107
+          ]
+        }
+      ]
+    },
+    "abo_excluding_flagged": {
+      "n": 550,
+      "ranking": [
+        {
+          "rank": 1,
+          "group": "O",
+          "patients": 276,
+          "probability": 0.502,
+          "ci95": [
+            0.46,
+            0.543
+          ]
+        },
+        {
+          "rank": 2,
+          "group": "A",
+          "patients": 129,
+          "probability": 0.235,
+          "ci95": [
+            0.201,
+            0.272
+          ]
+        },
+        {
+          "rank": 3,
+          "group": "B",
+          "patients": 106,
+          "probability": 0.193,
+          "ci95": [
+            0.162,
+            0.228
+          ]
+        },
+        {
+          "rank": 4,
+          "group": "AB",
+          "patients": 39,
+          "probability": 0.071,
+          "ci95": [
+            0.052,
+            0.095
+          ]
+        }
+      ]
+    },
+    "abo_rh_all_studies": {
+      "n": 765,
+      "studies": 6,
+      "ranking": [
+        {
+          "rank": 1,
+          "group": "O+",
+          "patients": 270,
+          "probability": 0.353,
+          "ci95": [
+            0.32,
+            0.387
+          ]
+        },
+        {
+          "rank": 2,
+          "group": "A+",
+          "patients": 162,
+          "probability": 0.212,
+          "ci95": [
+            0.184,
+            0.242
+          ]
+        },
+        {
+          "rank": 3,
+          "group": "B+",
+          "patients": 121,
+          "probability": 0.158,
+          "ci95": [
+            0.134,
+            0.186
+          ]
+        },
+        {
+          "rank": 4,
+          "group": "O-",
+          "patients": 62,
+          "probability": 0.081,
+          "ci95": [
+            0.064,
+            0.103
+          ]
+        },
+        {
+          "rank": 5,
+          "group": "AB+",
+          "patients": 55,
+          "probability": 0.072,
+          "ci95": [
+            0.056,
+            0.092
+          ]
+        },
+        {
+          "rank": 6,
+          "group": "A-",
+          "patients": 44,
+          "probability": 0.058,
+          "ci95": [
+            0.043,
+            0.076
+          ]
+        },
+        {
+          "rank": 7,
+          "group": "B-",
+          "patients": 40,
+          "probability": 0.052,
+          "ci95": [
+            0.039,
+            0.07
+          ]
+        },
+        {
+          "rank": 8,
+          "group": "AB-",
+          "patients": 11,
+          "probability": 0.014,
+          "ci95": [
+            0.008,
+            0.026
+          ]
+        }
+      ]
+    },
+    "abo_rh_excluding_flagged": {
+      "n": 496,
+      "studies": 4,
+      "ranking": [
+        {
+          "rank": 1,
+          "group": "O+",
+          "patients": 225,
+          "probability": 0.454,
+          "ci95": [
+            0.41,
+            0.498
+          ]
+        },
+        {
+          "rank": 2,
+          "group": "A+",
+          "patients": 104,
+          "probability": 0.21,
+          "ci95": [
+            0.176,
+            0.248
+          ]
+        },
+        {
+          "rank": 3,
+          "group": "B+",
+          "patients": 88,
+          "probability": 0.177,
+          "ci95": [
+            0.146,
+            0.213
+          ]
+        },
+        {
+          "rank": 4,
+          "group": "AB+",
+          "patients": 33,
+          "probability": 0.067,
+          "ci95": [
+            0.048,
+            0.092
+          ]
+        },
+        {
+          "rank": 5,
+          "group": "O-",
+          "patients": 17,
+          "probability": 0.034,
+          "ci95": [
+            0.022,
+            0.054
+          ]
+        },
+        {
+          "rank": 6,
+          "group": "A-",
+          "patients": 14,
+          "probability": 0.028,
+          "ci95": [
+            0.017,
+            0.047
+          ]
+        },
+        {
+          "rank": 7,
+          "group": "B-",
+          "patients": 13,
+          "probability": 0.026,
+          "ci95": [
+            0.015,
+            0.044
+          ]
+        },
+        {
+          "rank": 8,
+          "group": "AB-",
+          "patients": 2,
+          "probability": 0.004,
+          "ci95": [
+            0.001,
+            0.015
+          ]
+        }
+      ]
+    },
+    "abo_by_country": {
+      "Cameroon": {
+        "studies": 1,
+        "n": 184,
+        "ranking": [
+          {
+            "rank": 1,
+            "group": "O",
+            "patients": 99,
+            "probability": 0.538,
+            "ci95": [
+              0.466,
+              0.609
+            ]
+          },
+          {
+            "rank": 2,
+            "group": "B",
+            "patients": 41,
+            "probability": 0.223,
+            "ci95": [
+              0.169,
+              0.288
+            ]
+          },
+          {
+            "rank": 3,
+            "group": "A",
+            "patients": 33,
+            "probability": 0.179,
+            "ci95": [
+              0.131,
+              0.241
+            ]
+          },
+          {
+            "rank": 4,
+            "group": "AB",
+            "patients": 11,
+            "probability": 0.06,
+            "ci95": [
+              0.034,
+              0.104
+            ]
+          }
+        ]
+      },
+      "Nigeria": {
+        "studies": 5,
+        "n": 425,
+        "ranking": [
+          {
+            "rank": 1,
+            "group": "O",
+            "patients": 184,
+            "probability": 0.433,
+            "ci95": [
+              0.387,
+              0.48
+            ]
+          },
+          {
+            "rank": 2,
+            "group": "A",
+            "patients": 115,
+            "probability": 0.271,
+            "ci95": [
+              0.231,
+              0.315
+            ]
+          },
+          {
+            "rank": 3,
+            "group": "B",
+            "patients": 85,
+            "probability": 0.2,
+            "ci95": [
+              0.165,
+              0.241
+            ]
+          },
+          {
+            "rank": 4,
+            "group": "AB",
+            "patients": 41,
+            "probability": 0.096,
+            "ci95": [
+              0.072,
+              0.128
+            ]
+          }
+        ]
+      },
+      "Sudan": {
+        "studies": 1,
+        "n": 210,
+        "ranking": [
+          {
+            "rank": 1,
+            "group": "O",
+            "patients": 83,
+            "probability": 0.395,
+            "ci95": [
+              0.332,
+              0.463
+            ]
+          },
+          {
+            "rank": 2,
+            "group": "A",
+            "patients": 69,
+            "probability": 0.329,
+            "ci95": [
+              0.269,
+              0.395
+            ]
+          },
+          {
+            "rank": 3,
+            "group": "B",
+            "patients": 40,
+            "probability": 0.19,
+            "ci95": [
+              0.143,
+              0.249
+            ]
+          },
+          {
+            "rank": 4,
+            "group": "AB",
+            "patients": 18,
+            "probability": 0.086,
+            "ci95": [
+              0.055,
+              0.131
+            ]
+          }
+        ]
+      }
+    },
+    "africa_overall": {
+      "description": "Whole-Africa estimate built ONLY from the 3 countries with real patient data (Nigeria, Cameroon, Sudan). Not extrapolated to countries without data.",
+      "coverage": {
+        "countries_with_data": 3,
+        "total_african_countries": 54,
+        "countries_without_data": "all others (no ABO counts for sickle cell patients found)"
+      },
+      "patient_weighted_all_studies": {
+        "n": 819,
+        "ranking": [
+          {
+            "rank": 1,
+            "group": "O",
+            "patients": 366,
+            "probability": 0.447,
+            "ci95": [
+              0.413,
+              0.481
+            ]
+          },
+          {
+            "rank": 2,
+            "group": "A",
+            "patients": 217,
+            "probability": 0.265,
+            "ci95": [
+              0.236,
+              0.296
+            ]
+          },
+          {
+            "rank": 3,
+            "group": "B",
+            "patients": 166,
+            "probability": 0.203,
+            "ci95": [
+              0.177,
+              0.232
+            ]
+          },
+          {
+            "rank": 4,
+            "group": "AB",
+            "patients": 70,
+            "probability": 0.085,
+            "ci95": [
+              0.068,
+              0.107
+            ]
+          }
+        ]
+      },
+      "patient_weighted_excluding_flagged": {
+        "n": 550,
+        "ranking": [
+          {
+            "rank": 1,
+            "group": "O",
+            "patients": 276,
+            "probability": 0.502,
+            "ci95": [
+              0.46,
+              0.543
+            ]
+          },
+          {
+            "rank": 2,
+            "group": "A",
+            "patients": 129,
+            "probability": 0.235,
+            "ci95": [
+              0.201,
+              0.272
+            ]
+          },
+          {
+            "rank": 3,
+            "group": "B",
+            "patients": 106,
+            "probability": 0.193,
+            "ci95": [
+              0.162,
+              0.228
+            ]
+          },
+          {
+            "rank": 4,
+            "group": "AB",
+            "patients": 39,
+            "probability": 0.071,
+            "ci95": [
+              0.052,
+              0.095
+            ]
+          }
+        ]
+      },
+      "country_equal_weighted_all_studies": {
+        "countries": [
+          "Cameroon",
+          "Nigeria",
+          "Sudan"
+        ],
+        "n_countries": 3,
+        "ranking": [
+          {
+            "rank": 1,
+            "group": "O",
+            "probability": 0.455
+          },
+          {
+            "rank": 2,
+            "group": "A",
+            "probability": 0.26
+          },
+          {
+            "rank": 3,
+            "group": "B",
+            "probability": 0.204
+          },
+          {
+            "rank": 4,
+            "group": "AB",
+            "probability": 0.081
+          }
+        ]
+      },
+      "country_equal_weighted_excluding_flagged": {
+        "countries": [
+          "Cameroon",
+          "Nigeria",
+          "Sudan"
+        ],
+        "n_countries": 3,
+        "ranking": [
+          {
+            "rank": 1,
+            "group": "O",
+            "probability": 0.512
+          },
+          {
+            "rank": 2,
+            "group": "A",
+            "probability": 0.227
+          },
+          {
+            "rank": 3,
+            "group": "B",
+            "probability": 0.191
+          },
+          {
+            "rank": 4,
+            "group": "AB",
+            "probability": 0.07
+          }
+        ]
+      },
+      "caveat": "Equal weighting gives Cameroon and Sudan (1 study each) the same say as Nigeria (5 studies). The 3 countries are not a representative sample of Africa's 54."
+    }
+  },
+  "studies": [
+    {
+      "id": "cameroon_1",
+      "country": "Cameroon",
+      "period": "2015-2016",
+      "n": 184,
+      "abo": {
+        "O": 99,
+        "A": 33,
+        "B": 41,
+        "AB": 11
+      },
+      "rh": {
+        "Op": 95,
+        "On": 3,
+        "Ap": 33,
+        "An": 0,
+        "Bp": 40,
+        "Bn": 2,
+        "ABp": 10,
+        "ABn": 1
+      },
+      "flagged": false,
+      "url": "https://hsd-fmsb.org/index.php/hsd/article/download/1016/pdf_543/2940",
+      "note": "Text and table percentages differ slightly; table values used."
+    },
+    {
+      "id": "nigeria_2",
+      "country": "Nigeria",
+      "period": "2024",
+      "n": 170,
+      "abo": {
+        "O": 54,
+        "A": 60,
+        "B": 48,
+        "AB": 8
+      },
+      "rh": {
+        "Op": 42,
+        "On": 12,
+        "Ap": 40,
+        "An": 20,
+        "Bp": 27,
+        "Bn": 21,
+        "ABp": 5,
+        "ABn": 3
+      },
+      "flagged": true,
+      "url": "https://ajbs.scione.com/cms/fulltext.php?id=1049",
+      "note": "Rh-negative 32.9%, implausibly high versus other studies."
+    },
+    {
+      "id": "nigeria_3",
+      "country": "Nigeria",
+      "period": "2022-2023",
+      "n": 99,
+      "abo": {
+        "O": 36,
+        "A": 28,
+        "B": 12,
+        "AB": 23
+      },
+      "rh": {
+        "Op": 3,
+        "On": 33,
+        "Ap": 18,
+        "An": 10,
+        "Bp": 6,
+        "Bn": 6,
+        "ABp": 17,
+        "ABn": 6
+      },
+      "flagged": true,
+      "url": "https://e-journal.unair.ac.id/MBIO/article/download/55401/29181/312489",
+      "note": "Rh-negative 55.6%, implausibly high; paper has internal inconsistencies."
+    },
+    {
+      "id": "nigeria_4",
+      "country": "Nigeria",
+      "period": "2004-2013",
+      "n": 52,
+      "abo": {
+        "O": 33,
+        "A": 14,
+        "B": 5,
+        "AB": 0
+      },
+      "rh": {
+        "Op": 32,
+        "On": 1,
+        "Ap": 14,
+        "An": 0,
+        "Bp": 5,
+        "Bn": 0,
+        "ABp": 0,
+        "ABn": 0
+      },
+      "flagged": false,
+      "url": "https://medcraveonline.com/HTIJ/assessment-of-abo-rhesus-blood-groups-and-hemoglobin-concentrations-of-sickle-cell-disease-pregnant-women-at-booking-in-nigeria.html",
+      "note": "Women only; A-/B-/AB- counts implied zero.",
+      "population": "HbSS pregnant women"
+    },
+    {
+      "id": "sudan_5",
+      "country": "Sudan",
+      "period": "2014-2015",
+      "n": 210,
+      "abo": {
+        "O": 83,
+        "A": 69,
+        "B": 40,
+        "AB": 18
+      },
+      "rh": {
+        "Op": 72,
+        "On": 11,
+        "Ap": 55,
+        "An": 14,
+        "Bp": 31,
+        "Bn": 9,
+        "ABp": 17,
+        "ABn": 1
+      },
+      "flagged": false,
+      "url": "https://www.slideshare.net/iosrjce/red-cell-alloimmunization-in-blood-transfusion-dependent-patients-with-sickle-cell-disease-in-elobied-city-sudan",
+      "note": "Table values used (text gives O+ as 34.7%).",
+      "population": "HbSS, multiply transfused"
+    },
+    {
+      "id": "nigeria_6",
+      "country": "Nigeria",
+      "period": "2024",
+      "n": 50,
+      "abo": {
+        "O": 28,
+        "A": 2,
+        "B": 14,
+        "AB": 6
+      },
+      "rh": {
+        "Op": 26,
+        "On": 2,
+        "Ap": 2,
+        "An": 0,
+        "Bp": 12,
+        "Bn": 2,
+        "ABp": 6,
+        "ABn": 0
+      },
+      "flagged": false,
+      "url": "https://ajol.info/index.php/ajlhts/article/download/284798/268322/665697",
+      "note": "Small sample."
+    },
+    {
+      "id": "nigeria_7",
+      "country": "Nigeria",
+      "period": "published 2007",
+      "n": 54,
+      "abo": {
+        "O": 33,
+        "A": 11,
+        "B": 6,
+        "AB": 4
+      },
+      "rh": null,
+      "flagged": false,
+      "url": "https://core.ac.uk/download/478322449.pdf",
+      "note": "No Rh data reported."
+    }
+  ],
+  "not_pooled": [
+    {
+      "n": 98,
+      "reason": "Only group O reported (57.14%); D antigen 100%",
+      "url": "https://www.ajol.info/index.php/orapj/article/view/334658",
+      "country": "DR Congo"
+    },
+    {
+      "n": 352,
+      "reason": "Only O vs non-O compared; no group breakdown",
+      "url": "https://manuscript.isc.ac/Inventory/10/2578303.htm",
+      "country": "Nigeria"
+    },
+    {
+      "n": 241,
+      "reason": "Not an African population",
+      "url": "https://www.dovepress.com/erythrocyte-alloimmunization-and-transfusion-strategies-in-sickle-cell-peer-reviewed-fulltext-article-JBM",
+      "country": "Saudi Arabia"
+    }
+  ],
+  "limitations": [
+    "Five of seven studies are from Nigeria; the others are Cameroon and Sudan. No usable data found for East/Southern Africa or Francophone West Africa.",
+    "No usable ABO data found from 1996-2003; data is roughly 2004 onward.",
+    "Hospital samples, not random; ranking mirrors general-population blood group frequencies and does not imply any group raises or lowers sickle cell risk.",
+    "Two Nigerian studies (2022-2024) were flagged for implausible Rh-negative rates; inclusion is a judgment call."
+  ]
+}

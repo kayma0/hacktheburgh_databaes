@@ -47,21 +47,14 @@ def test_briefing_fallback_without_api_key(monkeypatch):
 
 
 def test_hotspots_shape_and_ordering():
-    r = client.get("/api/hotspots", params={"horizon": 2035})
+    r = client.get("/api/hotspots")
     assert r.status_code == 200
     body = r.json()
-    assert body["horizon"] == 2035 and body["data_year"] == 2023
+    assert body["data_year"] == 2023
     items = body["items"]
     assert len(items) == 54
-    assert items[0]["country"] == "Nigeria"
+    assert items[0]["country"] == "Nigeria" and items[0]["heat"] == 1.0
     assert [i["heat"] for i in items] == sorted((i["heat"] for i in items), reverse=True)
     for it in items:
-        for k in ("cases_now", "cases_horizon", "change", "births_per_year_horizon"):
-            p = it[k]
-            assert p["p10"] <= p["p50"] <= p["p90"]
-        assert it["path"][0]["year"] == 2023 and it["path"][-1]["year"] == 2035
-        assert it["history"][0]["year"] == 1996
-
-
-def test_hotspots_rejects_out_of_range_horizon():
-    assert client.get("/api/hotspots", params={"horizon": 2100}).status_code == 422
+        p = it["cases_now"]
+        assert p["p10"] <= p["p50"] <= p["p90"]

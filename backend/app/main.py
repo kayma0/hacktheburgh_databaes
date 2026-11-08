@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -99,13 +99,9 @@ def simulate(req: SimulateRequest):
 
 
 @app.get("/api/hotspots", response_model=HotspotsResponse)
-def hotspots(
-    horizon: int = Query(hotspots_mod.DEFAULT_HORIZON,
-                         ge=hotspots_mod.MIN_HORIZON, le=hotspots_mod.MAX_HORIZON),
-):
-    """Every country from data/raw.csv: people living with SCD now, projected to
-    `horizon`, and the newborns per year who could be reached by early screening."""
-    return hotspots_mod.compute_hotspots(horizon)
+def hotspots():
+    """Every country from data/raw.csv: people living with SCD, ranked by heat."""
+    return hotspots_mod.compute_hotspots()
 
 
 @app.post("/api/briefing", response_model=BriefingResponse)

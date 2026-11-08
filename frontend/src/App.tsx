@@ -20,7 +20,6 @@ import type {
   HotspotItem,
   HotspotsResponse,
   Percentiles,
-  YearPoint,
   SimulateResponse,
 } from "./api";
 
@@ -186,7 +185,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="page">
+      <main className={`page ${page === "hotspots" ? "page-wide" : ""}`}>
         {page === "stock" && (
           <StockPage
             countries={countries}
@@ -1079,11 +1078,11 @@ const GEO = africaGeo as unknown as {
 
 // Five heat classes, like the reference map's legend: a country is filled with its class.
 const HEAT_CLASSES = [
-  { min: 0.4, label: "Very high", color: "#7A0000" },
-  { min: 0.2, label: "High", color: "#B22222" },
-  { min: 0.1, label: "Moderate", color: "#D96A5C" },
-  { min: 0.03, label: "Low", color: "#EFA48E" },
-  { min: 0, label: "Very low", color: "#F9DDD1" },
+  { min: 0.4, label: "Highest", color: "#D4141B", ink: "#fff" },
+  { min: 0.2, label: "High", color: "#EA4A3C", ink: "#fff" },
+  { min: 0.1, label: "Medium", color: "#F59A82", ink: "#4a1b14" },
+  { min: 0.03, label: "Lower", color: "#F9CDBE", ink: "#4a1b14" },
+  { min: 0, label: "Lowest", color: "#FDEDE6", ink: "#4a1b14" },
 ];
 const heatClass = (h: number) =>
   HEAT_CLASSES.find((c) => h >= c.min) ?? HEAT_CLASSES[HEAT_CLASSES.length - 1];
@@ -1097,109 +1096,8 @@ const fmtBig = (n: number) => {
   return String(Math.round(n));
 };
 
-/** A big number with its P10–P90 range underneath. */
-function Stat({
-  label,
-  p,
-  prefix = "",
-  suffix = "",
-  digits = 0,
-  tone,
-}: {
-  label: string;
-  p: Percentiles;
-  prefix?: string;
-  suffix?: string;
-  digits?: number;
-  tone?: "up" | "down";
-}) {
-  const f = (v: number) =>
-    digits ? `${v.toFixed(digits)}${suffix}` : `${fmtBig(v)}${suffix}`;
-  const sign = (v: number) => (v > 0 && prefix ? prefix : "");
-  return (
-    <div className={`stat ${tone ? `stat-${tone}` : ""}`}>
-      <span className="stat-label">{label}</span>
-      <b className="stat-value">
-        {sign(p.p50)}
-        {f(p.p50)}
-      </b>
-      <small className="stat-range">
-        likely {f(p.p10)} to {f(p.p90)}
-      </small>
-    </div>
-  );
-}
-
-/** History (solid) + projection (dashed, with P10–P90 band) for one country. */
-function TrendChart({
-  history,
-  path,
-  dataYear,
-}: {
-  history: YearPoint[];
-  path: YearPoint[];
-  dataYear: number;
-}) {
-  const W = 400;
-  const H = 170;
-  const padL = 44;
-  const padB = 22;
-  const padT = 10;
-  const all = [...history, ...path];
-  const x0 = history[0]?.year ?? dataYear;
-  const x1 = path[path.length - 1]?.year ?? dataYear;
-  const yMax = niceCeil(Math.max(...all.map((p) => p.p90), 1));
-  const X = (yr: number) => padL + ((yr - x0) / (x1 - x0 || 1)) * (W - padL - 8);
-  const Y = (v: number) => padT + (1 - v / yMax) * (H - padT - padB);
-  const line = (pts: YearPoint[], k: "p10" | "p50" | "p90") =>
-    pts
-      .map((p, i) => `${i ? "L" : "M"}${X(p.year).toFixed(1)} ${Y(p[k]).toFixed(1)}`)
-      .join(" ");
-  const band =
-    path.length > 1
-      ? `${line(path, "p90")} ${[...path]
-          .reverse()
-          .map((p) => `L${X(p.year).toFixed(1)} ${Y(p.p10).toFixed(1)}`)
-          .join(" ")} Z`
-      : "";
-  const ticks = [0, 0.5, 1].map((f) => f * yMax);
-  const xt = [x0, dataYear, x1];
-  return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      className="trend"
-      role="img"
-      aria-label="People living with SCD to date and projection"
-    >
-      {ticks.map((t) => (
-        <g key={t}>
-          <line x1={padL} x2={W - 8} y1={Y(t)} y2={Y(t)} className="trend-grid" />
-          <text x={padL - 6} y={Y(t) + 3} textAnchor="end" className="trend-tick">
-            {fmtBig(t)}
-          </text>
-        </g>
-      ))}
-      {band && <path d={band} className="trend-band" />}
-      <path d={line(history, "p50")} className="trend-hist" />
-      <path d={line(path, "p50")} className="trend-proj" />
-      <line x1={X(dataYear)} x2={X(dataYear)} y1={padT} y2={H - padB} className="trend-now" />
-      {xt.map((yr, i) => (
-        <text
-          key={`${yr}-${i}`}
-          x={X(yr)}
-          y={H - 6}
-          textAnchor={i === 0 ? "start" : i === 2 ? "end" : "middle"}
-          className="trend-tick"
-        >
-          {yr}
-        </text>
-      ))}
-    </svg>
-  );
-}
-
 function HotspotsPage({
-  onOpen,
+  onOpen: _onOpen,
   onBlank,
 }: {
   onOpen: (country: string) => void;
@@ -1208,33 +1106,19 @@ function HotspotsPage({
   const [data, setData] = useState<HotspotsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sel, setSel] = useState<string | null>(null);
-  const [horizon, setHorizon] = useState(2035);
-  // The slider moves freely; the request is sent once it settles.
-  const [query, setQuery] = useState(2035);
   const [tip, setTip] = useState<{ name: string; x: number; y: number } | null>(
     null,
   );
   const figRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    const t = window.setTimeout(() => setQuery(horizon), 250);
-    return () => window.clearTimeout(t);
-  }, [horizon]);
-
-  useEffect(() => {
-    let live = true;
-    setError(null);
-    getHotspots(query)
+    getHotspots()
       .then((d) => {
-        if (!live) return;
         setData(d);
         setSel((cur) => cur ?? d.items[0]?.country ?? null);
       })
-      .catch((e) => live && setError(String(e)));
-    return () => {
-      live = false;
-    };
-  }, [query]);
+      .catch((e) => setError(String(e)));
+  }, []);
 
   const byName = useMemo(
     () => new Map((data?.items ?? []).map((i) => [i.country, i])),
@@ -1243,180 +1127,180 @@ function HotspotsPage({
   const selected = data?.items.find((i) => i.country === sel) ?? null;
   const selectedGeo = GEO.countries.filter((g) => g.name === sel);
   const dataYear = data?.data_year ?? 2023;
-  const hz = data?.horizon ?? query;
 
   const showTip = (e: ReactMouseEvent, name: string) => {
     const r = figRef.current?.getBoundingClientRect();
     if (r) setTip({ name, x: e.clientX - r.left, y: e.clientY - r.top });
   };
 
+  const cls = selected ? heatClass(selected.heat) : null;
+  const rank = selected ? (data?.items.findIndex((i) => i.country === selected.country) ?? 0) + 1 : 0;
+  const totalCases = (data?.items ?? []).reduce((a, i) => a + i.cases_now.p50, 0) || 1;
+  const shareOfTotal = selected
+    ? ((selected.cases_now.p50 / totalCases) * 100).toFixed(
+        selected.cases_now.p50 / totalCases < 0.1 ? 1 : 0,
+      )
+    : "0";
+
   return (
-    <div className="atlas">
-      <figure className="map-card" ref={figRef}>
-        <svg
-          viewBox={`0 0 ${GEO.w} ${GEO.h}`}
-          className="map"
-          role="img"
-          aria-label="Map of Africa, each country shaded by sickle cell heat"
-          onMouseLeave={() => setTip(null)}
-        >
-          <rect width={GEO.w} height={GEO.h} className="sea" />
-          <path d={GEO.context} className="ctx" />
-          {GEO.countries.map((g, i) => {
-            const it = byName.get(g.name);
-            return (
-              <path
-                key={`${g.name}-${i}`}
-                d={g.d}
-                className={`ctry ${it ? "has-data" : "no-data"}`}
-                style={it ? { fill: heatColor(it.heat) } : undefined}
-                onClick={() => it && setSel(g.name)}
-                onMouseMove={(e) => showTip(e, g.name)}
-                tabIndex={it ? 0 : -1}
-                role={it ? "button" : undefined}
-                aria-label={
-                  it ? `${g.name}, ${heatClass(it.heat).label}` : undefined
-                }
-                onKeyDown={(e) => it && e.key === "Enter" && setSel(g.name)}
-              />
-            );
-          })}
-          {/* Small island states are too small to see as shapes: add a marker. */}
-          {GEO.countries
-            .filter((g) => g.area < 20 && byName.has(g.name))
-            .map((g) => (
-              <circle
-                key={`dot-${g.name}`}
-                cx={g.cx}
-                cy={g.cy}
-                r={5}
-                className="island"
-                style={{ fill: heatColor(byName.get(g.name)!.heat) }}
-                onClick={() => setSel(g.name)}
-                onMouseMove={(e) => showTip(e, g.name)}
-              />
+    <>
+      <header className="ah">
+        <div>
+          <p className="eyebrow">Hotspot atlas · Africa</p>
+          <h1 className="hero-title ah-title">
+            See where sickle cell is <em>most common</em>
+          </h1>
+          <p className="ah-sub">
+            Each country is shaded by how many people live with sickle cell
+            disease. Tap a country to see its numbers.
+          </p>
+        </div>
+        <button className="btn ah-next" onClick={onBlank}>
+          Next page →
+        </button>
+      </header>
+
+      <div className="atlas">
+        <figure className="map-card" ref={figRef}>
+          <figcaption className="map-top">
+            <span>Tap a country</span>
+            <span className="map-top-note">Shade = people living with SCD</span>
+          </figcaption>
+          <svg
+            viewBox={`0 0 ${GEO.w} ${GEO.h}`}
+            className="map"
+            role="img"
+            aria-label="Map of Africa, each country shaded by people living with sickle cell disease"
+            onMouseLeave={() => setTip(null)}
+          >
+            <rect width={GEO.w} height={GEO.h} className="sea" />
+            <path d={GEO.context} className="ctx" />
+            {GEO.countries.map((g, i) => {
+              const it = byName.get(g.name);
+              return (
+                <path
+                  key={`${g.name}-${i}`}
+                  d={g.d}
+                  className={`ctry ${it ? "has-data" : "no-data"}`}
+                  style={it ? { fill: heatColor(it.heat) } : undefined}
+                  onClick={() => it && setSel(g.name)}
+                  onMouseMove={(e) => showTip(e, g.name)}
+                  tabIndex={it ? 0 : -1}
+                  role={it ? "button" : undefined}
+                  aria-label={
+                    it ? `${g.name}, ${heatClass(it.heat).label}` : undefined
+                  }
+                  onKeyDown={(e) => it && e.key === "Enter" && setSel(g.name)}
+                />
+              );
+            })}
+            {/* Small island states are too small to see as shapes: add a marker. */}
+            {GEO.countries
+              .filter((g) => g.area < 20 && byName.has(g.name))
+              .map((g) => (
+                <circle
+                  key={`dot-${g.name}`}
+                  cx={g.cx}
+                  cy={g.cy}
+                  r={5}
+                  className="island"
+                  style={{ fill: heatColor(byName.get(g.name)!.heat) }}
+                  onClick={() => setSel(g.name)}
+                  onMouseMove={(e) => showTip(e, g.name)}
+                />
+              ))}
+            {selectedGeo.map((g, i) => (
+              <path key={`sel-${i}`} d={g.d} className="ctry-sel" />
             ))}
-          {selectedGeo.map((g, i) => (
-            <path key={`sel-${i}`} d={g.d} className="ctry-sel" />
-          ))}
-        </svg>
-        {tip && (
-          <div className="map-tip" style={{ left: tip.x, top: tip.y }}>
-            <b>{tip.name}</b>
-            {byName.get(tip.name) ? (
-              <span>
-                {heatClass(byName.get(tip.name)!.heat).label} ·{" "}
-                {fmtBig(byName.get(tip.name)!.cases_now.p50)} people today
-              </span>
-            ) : (
-              <span>No data</span>
+            {selectedGeo[0] && (
+              <g className="signal" pointerEvents="none">
+                <circle cx={selectedGeo[0].cx} cy={selectedGeo[0].cy} r={5} />
+                <circle cx={selectedGeo[0].cx} cy={selectedGeo[0].cy} r={5} />
+                <circle
+                  cx={selectedGeo[0].cx}
+                  cy={selectedGeo[0].cy}
+                  r={3.4}
+                  className="signal-dot"
+                />
+              </g>
             )}
-          </div>
-        )}
-        <figcaption className="legend">
-          {HEAT_CLASSES.slice()
-            .reverse()
-            .map((c) => (
-              <span key={c.label} className="legend-item">
-                <i style={{ background: c.color }} />
-                {c.label}
-              </span>
-            ))}
-          <span className="legend-item">
-            <i className="legend-nodata" />
-            No data
-          </span>
-        </figcaption>
-      </figure>
-
-      <aside className="atlas-side">
-        {error && <div className="alert">Couldn't load hotspots: {error}</div>}
-        {!selected && !error && <p className="fine">Loading…</p>}
-        {selected && (
-          <article className="country">
-            <header className="country-head">
-              <div>
-                <p className="eyebrow">Sickle cell disease</p>
-                <h2>{selected.country}</h2>
-              </div>
-              <span
-                className="pill"
-                style={{ background: heatColor(selected.heat) }}
-              >
-                {heatClass(selected.heat).label}
-              </span>
-            </header>
-
-            <div className="stat-pair">
-              <Stat label={`People living with SCD, ${dataYear}`} p={selected.cases_now} />
-              <Stat label={`Expected by ${hz}`} p={selected.cases_horizon} />
+          </svg>
+          {tip && (
+            <div className="map-tip" style={{ left: tip.x, top: tip.y }}>
+              <b>{tip.name}</b>
+              {byName.get(tip.name) ? (
+                <span>
+                  {fmtBig(byName.get(tip.name)!.cases_now.p50)} people living
+                  with SCD
+                </span>
+              ) : (
+                <span>No data</span>
+              )}
             </div>
+          )}
+          <div className="legend">
+            <span className="legend-title">Fewer</span>
+            <span className="legend-ramp">
+              {HEAT_CLASSES.slice()
+                .reverse()
+                .map((c) => (
+                  <i key={c.label} style={{ background: c.color }} title={c.label} />
+                ))}
+            </span>
+            <span className="legend-title">More</span>
+            <span className="legend-item legend-gap">
+              <i className="legend-nodata" />
+              No data
+            </span>
+          </div>
+        </figure>
 
-            <TrendChart
-              history={selected.history}
-              path={selected.path}
-              dataYear={dataYear}
-            />
-            <p className="trend-key">
-              <span>
-                <i className="k-hist" />
-                Measured
-              </span>
-              <span>
-                <i className="k-proj" />
-                Projected, shaded range
-              </span>
-            </p>
+        <aside className="atlas-side">
+          {error && <div className="alert">Couldn't load hotspots: {error}</div>}
+          {!selected && !error && <p className="fine">Loading…</p>}
+          {selected && cls && (
+            <article className="country">
+              <header className="country-head">
+                <div>
+                  <p className="eyebrow">Selected country</p>
+                  <h2>{selected.country}</h2>
+                </div>
+                <span className="pill" style={{ background: cls.color, color: cls.ink }}>
+                  {cls.label}
+                </span>
+              </header>
 
-            <Dial
-              label="Look ahead to"
-              value={horizon}
-              min={2025}
-              max={2050}
-              step={1}
-              format={(v) => String(v)}
-              onChange={setHorizon}
-            />
+              <section className="block">
+                <p className="block-label">
+                  People living with sickle cell disease, {dataYear}
+                </p>
+                <p className="big">{fmtBig(selected.cases_now.p50)}</p>
+                <p className="rng">
+                  likely between {fmtBig(selected.cases_now.p10)} and{" "}
+                  {fmtBig(selected.cases_now.p90)}
+                </p>
+              </section>
 
-            <dl className="rows">
-              <div>
-                <dt>Change by {hz}</dt>
-                <dd>
-                  {selected.change.p50 >= 0 ? "+" : "−"}
-                  {fmtBig(Math.abs(selected.change.p50))}
-                  <small>
-                    {" "}
-                    ({selected.growth_pct_per_year.p50 >= 0 ? "+" : "−"}
-                    {Math.abs(selected.growth_pct_per_year.p50).toFixed(1)}% a
-                    year)
-                  </small>
-                </dd>
-              </div>
-              <div>
-                <dt>Newborns with SCD a year, {hz}</dt>
-                <dd>
-                  {fmtBig(selected.births_per_year_horizon.p50)}
-                  <small>
-                    {" "}
-                    ({fmtBig(selected.births_per_year_horizon.p10)}–
-                    {fmtBig(selected.births_per_year_horizon.p90)})
-                  </small>
-                </dd>
-              </div>
-            </dl>
+              <dl className="facts-list">
+                <div>
+                  <dt>Rank among {data?.items.length ?? 54} countries</dt>
+                  <dd>#{rank}</dd>
+                </div>
+                <div>
+                  <dt>Share of all people counted</dt>
+                  <dd>{shareOfTotal}%</dd>
+                </div>
+              </dl>
 
-            <p className="country-note">
-              Modelled estimates with a likely range, not observations. Newborns
-              are the children early screening could reach.
-            </p>
-
-            <button className="btn" onClick={onBlank}>
-              Next page →
-            </button>
-          </article>
-        )}
-      </aside>
-    </div>
+              <p className="country-note">
+                Modelled estimates from the Global Burden of Disease study, with
+                a likely range. Not a medical device.
+              </p>
+            </article>
+          )}
+        </aside>
+      </div>
+    </>
   );
 }
 

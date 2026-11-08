@@ -53,31 +53,15 @@ export interface SimulateRequest {
   crisis_by_age?: Record<string, number>;
 }
 
-export interface YearPoint {
-  year: number;
-  p10: number;
-  p50: number;
-  p90: number;
-}
-
 export interface HotspotItem {
   country: string;
+  /** 0-1: people living with SCD relative to the highest country (square-rooted). */
   heat: number;
   cases_now: Percentiles;
-  cases_horizon: Percentiles;
-  growth_pct_per_year: Percentiles;
-  /** Extra people living with SCD at the horizon versus today (negative = fewer). */
-  change: Percentiles;
-  births_per_year_horizon: Percentiles;
-  /** Observed GBD series (p50 = estimate, p10/p90 = its 95% interval). */
-  history: YearPoint[];
-  /** Modelled projection from the last data year to the horizon. */
-  path: YearPoint[];
 }
 
 export interface HotspotsResponse {
   data_year: number;
-  horizon: number;
   items: HotspotItem[];
 }
 
@@ -133,8 +117,8 @@ export function simulate(req: SimulateRequest): Promise<SimulateResponse> {
   return postJson("/api/simulate", req);
 }
 
-export async function getHotspots(horizon: number): Promise<HotspotsResponse> {
-  const res = await fetch(`/api/hotspots?horizon=${horizon}`);
+export async function getHotspots(): Promise<HotspotsResponse> {
+  const res = await fetch("/api/hotspots");
   if (!res.ok) throw new Error(`/api/hotspots failed: ${res.status}`);
   return res.json();
 }

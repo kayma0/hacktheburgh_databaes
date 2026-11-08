@@ -78,17 +78,13 @@ Every output is reported as P10 / P50 / P90.
 people, all ages, both sexes) for 54 African countries, 1996-2023, with a 95% interval.
 10,000 Monte Carlo draws per country (seed `20261107`), reported as P10/P50/P90:
 
-1. Cases today ~ lognormal matched to the 2023 value and its 95% interval.
-2. Growth: log-linear trend over 2009-2023. Slope ~ normal with SD = sqrt(regression SE^2 +
-   0.006^2). The 0.006 floor is an ASSUMPTION so extrapolation is not falsely tight.
-3. Cases in year *t* = cases today x exp(slope x (*t* - 2023)), up to the chosen horizon.
-   "Change" is cases at the horizon minus cases today.
-4. Newborns with SCD per year = cases x a fraction ~ triangular(0.03, 0.05, 0.09).
-   ASSUMPTION, roughly calibrated to Piel et al. 2013 (Nigeria ~ 90k SCA births in 2010
-   vs ~ 1.9M GBD cases). Recalled from memory, not from a file in this repo: verify.
-   Shown as the number of babies who could be reached by early screening and care.
-5. Heat = sqrt(1/2 x cases today / max + 1/2 x max(change, 0) / max).
+1. People living with SCD ~ lognormal matched to the latest (2023) value and its 95%
+   interval.
+2. Heat (map shading) = sqrt(people living with SCD / highest country), so mid-sized
+   countries stay visible next to Nigeria. Five classes: Highest >= 0.4, High >= 0.2,
+   Medium >= 0.1, Lower >= 0.03, Lowest below that.
+3. Rank and "share of all people counted" use each country's median, out of the 54
+   countries in the file.
 
-Not modelled: the effect of screening or treatment, migration, changes in survival or
-birth rates over time, and any difference between SCD and SCA (the data counts all
-sickle cell disorders; the birth fraction is calibrated on SCA).
+There is deliberately no forecast on this page. The data counts all sickle cell
+disorders, not only sickle cell anaemia.

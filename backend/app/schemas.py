@@ -63,29 +63,15 @@ class SimulateResponse(BaseModel):
     units_avoided: Percentiles
 
 
-class HistoryPoint(BaseModel):
-    year: int
-    p10: float
-    p50: float
-    p90: float
-
-
 class HotspotItem(BaseModel):
     country: str
     heat: float = Field(
-        description="0-1 composite of current cases and expected growth in cases")
+        description="0-1: people living with SCD relative to the highest country (square-rooted)")
     cases_now: Percentiles
-    cases_horizon: Percentiles
-    growth_pct_per_year: Percentiles
-    change: Percentiles
-    births_per_year_horizon: Percentiles
-    history: list[HistoryPoint]
-    path: list[HistoryPoint]
 
 
 class HotspotsResponse(BaseModel):
     data_year: int
-    horizon: int
     items: list[HotspotItem]
 
 
