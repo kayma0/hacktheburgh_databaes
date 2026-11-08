@@ -4,33 +4,28 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from . import appeal as appeal_mod
-from . import auth as auth_mod
-from . import plans_store
-from . import backtest as backtest_mod
 from . import crisis as crisis_mod
 from . import hotspots as hotspots_mod
-from . import plan as plan_mod
+from . import model
 from . import reservoir as reservoir_mod
+from .appeal import draft_appeal
 from .briefing import get_briefing
+from .data_loader import load_data
 from .schemas import (
     AppealRequest,
     AppealResponse,
-    BacktestResponse,
     BriefingRequest,
     BriefingResponse,
     CalibrationResponse,
     CrisisResponse,
     HotspotsResponse,
-    PlanResponse,
-    SavedPlan,
-    SavedPlanIn,
-    SensitivityResponse,
     ReservoirResponse,
+    SimulateRequest,
+    SimulateResponse,
 )
 
 load_dotenv()
@@ -45,14 +40,70 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Legacy model data (burden / WHO blood / parameters). The stock and briefing pages need
+# it; the hotspots page does not, so a missing file must not stop the API starting.
+try:
+    DATA = load_data()
+except FileNotFoundError:
+    DATA = None
+
+
+def _need_data():
+    if DATA is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Blood-stock model data is not in data/raw/ yet.",
+        )
+    return DATA
+
+
+def _inputs_for(country: str) -> tuple[dict, float] | None:
+    _need_data()
+    burden_rows = DATA.burden[DATA.burden["country"] == country]
+    who_rows = DATA.who_blood[DATA.who_blood["country"] == country]
+    if burden_rows.empty or who_rows.empty:
+        return None
+    who_row = who_rows.iloc[0].to_dict()
+    collections_per_year = who_row["donations_per_1000"] * \
+        who_row["population"] / 1000
+    return burden_rows.iloc[0].to_dict(), float(collections_per_year)
+
+
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "is_sample_data": DATA.is_sample if DATA else False}
 
 
 @app.get("/api/countries")
 def countries():
-    return {"countries": sorted(c["country"] for c in hotspots_mod.load_heatmap()["items"])}
+    if DATA is None:
+        return {"countries": sorted(hotspots_mod.load_series())}
+    return {"countries": sorted(DATA.burden["country"].tolist())}
+
+
+@app.post("/api/simulate", response_model=SimulateResponse)
+def simulate(req: SimulateRequest):
+    inputs = _inputs_for(req.country)
+    if inputs is None:
+        raise HTTPException(
+            status_code=404, detail=f"No data for country: {req.country}")
+    burden_row, collections_per_year = inputs
+
+    result = model.run_simulation(
+        burden_row=burden_row,
+        collections_per_year=collections_per_year,
+        params=DATA.parameters,
+        share_diagnosed=req.share_diagnosed,
+        share_on_hydroxyurea=req.share_on_hydroxyurea,
+        units_per_event=req.units_per_event,
+        donor_deferral_rate=req.donor_deferral_rate,
+        target_coverage=req.target_coverage,
+        crisis_patients=req.crisis_patients,
+        stock_days_on_hand=req.stock_days_on_hand,
+        crisis_by_age=req.crisis_by_age,
+    )
+
+    return SimulateResponse(country=req.country, is_sample_data=DATA.is_sample, **result)
 
 
 @app.get("/api/hotspots", response_model=HotspotsResponse)
@@ -88,6 +139,13 @@ def crisis(
         raise HTTPException(status_code=404, detail=f"No data for country: {country}")
 
 
+@app.post("/api/appeal", response_model=AppealResponse)
+def appeal(req: AppealRequest):
+    """A donor appeal (WhatsApp, SMS, email) from a simulator result. Gemini writes it when
+    GEMINI_API_KEY is set; otherwise a template, so it always works."""
+    return draft_appeal(req)
+
+
 @app.get("/api/reservoir", response_model=ReservoirResponse)
 def reservoir(
     country: str,
@@ -101,116 +159,8 @@ def reservoir(
         raise HTTPException(status_code=404, detail=f"No data for country: {country}")
 
 
-@app.get("/api/plan", response_model=PlanResponse)
-def plan(
-    country: str,
-    share_in_care: float = Query(reservoir_mod.DEFAULT_SHARE_IN_CARE, ge=0, le=1),
-    people: int = Query(25, ge=1, le=crisis_mod.MAX_PEOPLE),
-    days: int = Query(30, ge=1, le=crisis_mod.MAX_DAYS),
-    seed: int = Query(plan_mod.DEFAULT_SEED, ge=0, le=2**31 - 1,
-                      description="Fixed by default so a shared link rebuilds the same plan"),
-    deferral: float = Query(plan_mod.DEFAULT_DEFERRAL, ge=plan_mod.DEFERRAL_RANGE[0], le=plan_mod.DEFERRAL_RANGE[1]),
-    donations_per_donor: float = Query(plan_mod.DEFAULT_DONATIONS_PER_DONOR,
-                                       ge=plan_mod.DONATIONS_PER_DONOR_RANGE[0],
-                                       le=plan_mod.DONATIONS_PER_DONOR_RANGE[1]),
-    coverage: float = Query(plan_mod.DEFAULT_COVERAGE, ge=0, le=1),
-    o_neg_fallback: bool = False,
-    crisis_first: bool = False,
-):
-    """Drive plan for one country: which blood groups to push for, and how many donors to
-    recruit, from the reservoir (everyday gap) and crisis (surge) models."""
-    try:
-        return plan_mod.build_plan(
-            country, share_in_care, people, days, seed, deferral,
-            donations_per_donor, coverage, o_neg_fallback, crisis_first)
-    except KeyError:
-        raise HTTPException(status_code=404, detail=f"No data for country: {country}")
-
-
-@app.get("/api/backtest", response_model=BacktestResponse)
-def backtest():
-    """The case-trend method tested on the past: fit to data up to 2018, predict after."""
-    return backtest_mod.backtest()
-
-
-@app.get("/api/sensitivity", response_model=SensitivityResponse)
-def sensitivity(
-    country: str,
-    people: int = Query(25, ge=1, le=crisis_mod.MAX_PEOPLE),
-    days: int = Query(30, ge=1, le=crisis_mod.MAX_DAYS),
-    deferral: float = Query(plan_mod.DEFAULT_DEFERRAL, ge=plan_mod.DEFERRAL_RANGE[0], le=plan_mod.DEFERRAL_RANGE[1]),
-    donations_per_donor: float = Query(plan_mod.DEFAULT_DONATIONS_PER_DONOR,
-                                       ge=plan_mod.DONATIONS_PER_DONOR_RANGE[0],
-                                       le=plan_mod.DONATIONS_PER_DONOR_RANGE[1]),
-    coverage: float = Query(plan_mod.DEFAULT_COVERAGE, ge=0, le=1),
-):
-    """Which assumption moves the regular-donor total most, for this country."""
-    try:
-        return plan_mod.sensitivity(country, people=people, days=days, deferral=deferral,
-                                    donations_per_donor=donations_per_donor, coverage=coverage)
-    except KeyError:
-        raise HTTPException(status_code=404, detail=f"No data for country: {country}")
-
-
-@app.post("/api/appeal", response_model=AppealResponse)
-def appeal(req: AppealRequest):
-    """A donation appeal written from the drive plan's numbers (Gemini, with a template
-    fallback). Text only: nothing is sent and no donor details are stored."""
-    try:
-        return appeal_mod.write_appeal(
-            req.country, req.channel, req.tone, req.language, req.details.model_dump(),
-            dict(people=req.people, days=req.days, deferral=req.deferral,
-                 donations_per_donor=req.donations_per_donor, coverage=req.coverage,
-                 o_neg_fallback=req.o_neg_fallback, crisis_first=req.crisis_first))
-    except KeyError:
-        raise HTTPException(status_code=404, detail=f"No data for country: {req.country}")
-
-
-@app.get("/api/auth/config")
-def auth_config():
-    """Whether sign-in is set up on this server (the browser also needs its own Auth0 ids)."""
-    return {"enabled": auth_mod.auth_config() is not None}
-
-
-@app.get("/api/plans", response_model=list[SavedPlan])
-def list_saved_plans(user: str = Depends(auth_mod.current_user)):
-    return plans_store.list_plans(user)
-
-
-@app.post("/api/plans", response_model=SavedPlan)
-def save_plan(body: SavedPlanIn, user: str = Depends(auth_mod.current_user)):
-    known = {c["country"] for c in hotspots_mod.load_heatmap()["items"]}
-    if body.country not in known:
-        raise HTTPException(status_code=404, detail=f"No data for country: {body.country}")
-    query = plans_store.clean_query(body.query)
-    if not query:
-        raise HTTPException(status_code=422, detail="Nothing to save")
-    try:
-        return plans_store.add_plan(user, body.name.strip(), body.country, query)
-    except ValueError:
-        raise HTTPException(status_code=409, detail=f"You can keep up to {plans_store.MAX_PLANS_PER_USER} saved plans.")
-
-
-@app.delete("/api/plans/{plan_id}")
-def delete_saved_plan(plan_id: int, user: str = Depends(auth_mod.current_user)):
-    if not plans_store.delete_plan(user, plan_id):
-        raise HTTPException(status_code=404, detail="No such saved plan")
-    return {"deleted": plan_id}
-
-
-MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August",
-          "September", "October", "November", "December")
-
-
 @app.post("/api/briefing", response_model=BriefingResponse)
 def briefing(req: BriefingRequest):
-    """Travel checklist for a charity team. Country and month are checked against known
-    values because they go into a Gemini prompt."""
-    known = {c["country"] for c in hotspots_mod.load_heatmap()["items"]}
-    if req.country not in known:
-        raise HTTPException(status_code=404, detail=f"No data for country: {req.country}")
-    if req.month not in MONTHS:
-        raise HTTPException(status_code=422, detail="month must be a calendar month name")
     return get_briefing(req.country, req.month)
 
 
