@@ -11,11 +11,14 @@ The app only writes text. It never sends a message and never stores donor detail
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 
 from . import plan as plan_mod
+
+log = logging.getLogger(__name__)
 
 TIMEOUT_S = 15
 MODEL_ENV, MODEL_DEFAULT = "GEMINI_MODEL", "gemini-3.8-flash"
@@ -174,6 +177,7 @@ def write_appeal(country: str, channel: str, tone: str, language: str,
         note = "Machine-written: please have a native speaker check this before you use it."
 
     def result(text: str, source: str, fallback_reason: str | None) -> dict:
+        log.info("appeal: %s%s", source, f" ({fallback_reason})" if fallback_reason else "")
         n = note
         if source == "template" and language != "English":
             n = "The offline template is English only. Add a Gemini key for other languages."

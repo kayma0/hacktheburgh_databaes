@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 
@@ -37,6 +38,9 @@ from .schemas import (
 )
 
 load_dotenv()
+
+# So the "gemini" / "template" line each Gemini-backed feature logs reaches the terminal.
+logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="SickleSignal API")
 

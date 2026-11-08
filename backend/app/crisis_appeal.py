@@ -167,6 +167,7 @@ def draft_crisis_appeal(req: CrisisAppealRequest) -> CrisisAppealResponse:
         return _cache[key]
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key or not _wanted(req):
+        log.info("crisis appeal: template (%s)", "no_api_key" if not api_key else "nothing to ask for")
         return _template(req)
 
     from concurrent.futures import ThreadPoolExecutor
@@ -182,6 +183,8 @@ def draft_crisis_appeal(req: CrisisAppealRequest) -> CrisisAppealResponse:
             continue
         finally:
             pool.shutdown(wait=False)
+        log.info("crisis appeal: gemini (%s)", model)
         _cache[key] = result
         return result
+    log.info("crisis appeal: template (every model failed)")
     return _template(req)  # not cached, so the next click retries Gemini

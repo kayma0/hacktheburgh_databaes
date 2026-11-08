@@ -1,9 +1,12 @@
 """Gemini-generated field briefing for a country/month, with cache and fallback."""
 from __future__ import annotations
 
+import logging
 import os
 
 from .schemas import BriefingItem, BriefingResponse, BriefingSection
+
+log = logging.getLogger(__name__)
 
 _cache: dict[tuple[str, str], BriefingResponse] = {}
 
@@ -66,6 +69,7 @@ def get_briefing(country: str, month: str) -> BriefingResponse:
 
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
+        log.info("briefing: template (no_api_key)")
         result = _fallback(country, month)
         _cache[key] = result
         return result
@@ -77,12 +81,14 @@ def get_briefing(country: str, month: str) -> BriefingResponse:
     try:
         future = pool.submit(_call_gemini, country, month, api_key)
         result = future.result(timeout=TIMEOUT_S)
-    except Exception:
+    except Exception as e:
         # Don't cache transient failures, so the next request retries Gemini.
+        log.info("briefing: template (gemini failed: %s: %s)", type(e).__name__, e)
         return _fallback(country, month)
     finally:
         pool.shutdown(wait=False)
 
+    log.info("briefing: gemini")
     _cache[key] = result
     return result
 
