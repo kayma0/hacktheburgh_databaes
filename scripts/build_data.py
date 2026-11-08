@@ -3,9 +3,10 @@
     python scripts/build_data.py [--year 2026]
 
 Inputs (GBD 2021, sickle cell disorders, prevalence as number of people):
-  data/raw.csv         all ages, both sexes, per country and year, with a 95% interval
-  data/male_raw.csv    by age group, male
-  data/female_raw.csv  by age group, female
+  data/raw.csv                 all ages, both sexes, per country and year, 95% interval
+  data/male_raw.csv            by age group, male
+  data/female_raw.csv          by age group, female
+  data/blood_groups_simple.json  ABO/RhD probability distribution, one global rate
 
 Outputs:
   data/processed/usecases.json  100 likely patient personas per country
@@ -63,6 +64,8 @@ ML_PER_UNIT = 250  # one red-cell unit, so personas can be read in units as well
 
 PERSONAS_PER_COUNTRY = 100
 
+BLOOD_GROUPS_FILE = "blood_groups_simple.json"
+
 # Legend bands for the map, in projected cases. Fixed and round, so the legend is
 # stable between runs and readable.
 BUCKETS = [
@@ -108,11 +111,11 @@ def dose_ml(age_group: str, sex: str) -> int:
 
 
 def allocate(weights: dict, total: int) -> dict:
-    """Split `total` whole personas across cells in proportion to their case counts.
+    """Split `total` whole personas across cells in proportion to their weights.
 
     Largest-remainder method: every cell gets its floor share, then the leftovers go to
     the cells that were rounded down hardest. The result always sums to `total`, so the
-    100 personas mirror the real age and sex mix as closely as 100 people can.
+    100 personas mirror the real mix as closely as 100 whole people can.
     """
     pool = sum(weights.values())
     exact = {k: total * w / pool for k, w in weights.items()}
@@ -124,6 +127,43 @@ def allocate(weights: dict, total: int) -> dict:
     return counts
 
 
+def load_blood_group_probabilities() -> dict[str, float]:
+    """blood_group -> probability, from data/blood_groups_simple.json.
+
+    One global ABO/RhD distribution (not broken down by country, age or sex -- the
+    source data has no such breakdown), so it is applied the same way everywhere.
+    """
+    path = DATA / BLOOD_GROUPS_FILE
+    if not path.exists():
+        raise FileNotFoundError(f"Missing input: {path}")
+    with open(path, encoding="utf-8") as f:
+        rows = json.load(f)
+    probs = {row["blood_group"]: float(row["probability"]) for row in rows}
+    total = sum(probs.values())
+    if abs(total - 1.0) > 1e-3:
+        raise ValueError(f"{BLOOD_GROUPS_FILE} probabilities sum to {total}, not 1.0")
+    return probs
+
+
+def interleave(counts: dict[str, int], total: int) -> list[str]:
+    """Order `counts` items so each key is spread through the sequence instead of
+    bunched into one block.
+
+    Weighted round-robin: each step picks whichever key is furthest behind its
+    proportional share so far. Used for blood group so it does not end up clustered
+    with age/sex just because of the order personas happen to be built in -- blood
+    group is independent of both.
+    """
+    eligible = {k: c for k, c in counts.items() if c > 0}
+    assigned = {k: 0 for k in eligible}
+    order = []
+    for _ in range(total):
+        pick = min(eligible, key=lambda k: (assigned[k] + 1) / eligible[k])
+        order.append(pick)
+        assigned[pick] += 1
+    return order
+
+
 def build_usecases(latest_year: int) -> dict:
     """100 personas per country, in proportion to who actually lives with the disease."""
     cases: dict[str, dict] = defaultdict(lambda: defaultdict(float))
@@ -131,6 +171,13 @@ def build_usecases(latest_year: int) -> dict:
         for r in read_csv(name):
             if int(r["year"]) == latest_year:
                 cases[r["location_name"]][(r["age_name"], sex)] += float(r["val"])
+
+    blood_probs = load_blood_group_probabilities()
+    blood_counts = allocate(blood_probs, PERSONAS_PER_COUNTRY)
+    # Same 100-long sequence for every country: there is no per-country blood group
+    # data, so each country's personas get the one global distribution, interleaved so
+    # it does not correlate with that country's particular age/sex ordering.
+    blood_sequence = interleave(blood_counts, PERSONAS_PER_COUNTRY)
 
     countries = []
     for country in sorted(cases):
@@ -140,10 +187,12 @@ def build_usecases(latest_year: int) -> dict:
             for sex in ("male", "female"):
                 ml = dose_ml(age_group, sex)
                 for _ in range(counts.get((age_group, sex), 0)):
+                    idx = len(personas)
                     personas.append({
-                        "id": len(personas) + 1,
+                        "id": idx + 1,
                         "age_group": age_group,
                         "sex": sex,
+                        "blood_group": blood_sequence[idx],
                         "blood_ml": ml,
                         "units": round(ml / ML_PER_UNIT, 1),
                     })
@@ -158,9 +207,12 @@ def build_usecases(latest_year: int) -> dict:
             "description": (
                 f"{PERSONAS_PER_COUNTRY} likely sickle-cell patient personas per "
                 "country. The age and sex mix is the real GBD prevalence distribution; "
-                "the blood amount is a modelled assumption."
+                "blood_group is a general population ABO/RhD distribution, not specific "
+                "to this country or to sickle cell disease; the blood amount is a "
+                "modelled assumption."
             ),
             "source": f"GBD 2021 sickle cell disorders prevalence, {latest_year}",
+            "blood_group_probabilities": blood_probs,
             "blood_ml_assumption": BLOOD_ML,
             "female_dose_factor": FEMALE_DOSE_FACTOR,
             "ml_per_unit": ML_PER_UNIT,

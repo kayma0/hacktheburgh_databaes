@@ -88,3 +88,15 @@ people, all ages, both sexes) for 54 African countries, 1996-2023, with a 95% in
 
 There is deliberately no forecast on this page. The data counts all sickle cell
 disorders, not only sickle cell anaemia.
+
+## Use-case personas (`scripts/build_data.py`, writes `data/processed/usecases.json`)
+
+100 likely sickle-cell patient personas per country: `age_group` and `sex` come from
+the real GBD prevalence split (largest-remainder allocation, so the 100 personas mirror
+who actually lives with the disease). `blood_group` comes from
+`data/blood_groups_simple.json`, a single global ABO/RhD probability distribution (not
+specific to this country, or to sickle cell disease, since no finer data exists) --
+allocated the same way and interleaved so it does not cluster by age or sex. At 100
+personas, AB- (0.4% global probability) rounds to zero. `blood_ml` is an ASSUMPTION:
+red cells for one acute episode, by weight-based dosing per age group (`meta.blood_ml_assumption`
+in the file has the min/mode/max).
