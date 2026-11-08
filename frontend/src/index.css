@@ -969,6 +969,9 @@ input[type="range"]:focus-visible {
   white-space: nowrap;
 }
 .hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
   margin-top: 18px;
 }
 @media (max-width: 560px) {

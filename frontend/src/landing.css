@@ -482,7 +482,9 @@
     padding-top: 32px;
   }
   .lp-card {
+    width: 100%;
     max-width: 480px;
+    margin: 0 auto;
     transform: none;
   }
 }
@@ -496,6 +498,38 @@
   }
   .lp-slogan {
     font-size: clamp(0.9rem, 4.6vw, 1.2rem);
+  }
+}
+
+/* big monitors: scale the card up and let the logo grow, so nothing looks lost */
+@media (min-width: 1800px) {
+  .lp-wrap {
+    max-width: 1500px;
+    grid-template-columns: minmax(0, 1.45fr) 528px;
+  }
+  .lp-card {
+    zoom: 1.2;
+  }
+  .lp-logo {
+    width: clamp(230px, min(30vw, 55vh * 1.2), 620px);
+  }
+}
+@media (min-width: 2400px) {
+  .lp-wrap {
+    max-width: 1800px;
+    grid-template-columns: minmax(0, 1.45fr) 638px;
+  }
+  .lp-card {
+    zoom: 1.45;
+  }
+  .lp-logo {
+    width: clamp(230px, min(28vw, 55vh * 1.2), 760px);
+  }
+  .lp-name {
+    font-size: 4.6rem;
+  }
+  .lp-slogan {
+    font-size: 1.9rem;
   }
 }
 
