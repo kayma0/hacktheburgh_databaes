@@ -4,22 +4,29 @@ import type {
   CSSProperties,
   KeyboardEvent,
   MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+  ReactNode,
 } from "react";
 import {
   askAssistant,
   getBriefing,
+  getCalibration,
   getCountries,
   getHealth,
   getHotspots,
+  getReservoir,
   simulate,
 } from "./api";
 import type {
   BloodTypeStock,
   BriefingResponse,
+  CalibrationResponse,
   ChatMessage,
   HotspotItem,
   HotspotsResponse,
   Percentiles,
+  ReservoirResponse,
+  StockStatus,
   SimulateResponse,
 } from "./api";
 
@@ -40,15 +47,14 @@ const MONTHS = [
   "December",
 ];
 
-type Page = "hotspots" | "stock" | "briefing" | "blank";
-// "blank" is a placeholder for the next page to build; it is reached from the
-// hotspots page button rather than from the tab bar.
+// The app is the hotspots map plus the blood reservoir page. StockPage and BriefingPage
+// below are kept but not routed (the stock model's data/raw/ files are missing).
+type Page = "hotspots" | "reservoir";
 const PAGES: { id: Page; num: string; label: string }[] = [
   { id: "hotspots", num: "01", label: "Hotspots" },
-  { id: "stock", num: "02", label: "Blood stock" },
-  { id: "briefing", num: "03", label: "Field briefing" },
+  { id: "reservoir", num: "02", label: "Blood reservoir" },
 ];
-const ALL_PAGES: Page[] = ["hotspots", "stock", "briefing", "blank"];
+const ALL_PAGES: Page[] = ["hotspots", "reservoir"];
 
 const fmt = (n: number) => Math.round(n).toLocaleString("en-GB");
 const pct = (v: number) => `${Math.round(v * 100)}%`;
@@ -69,42 +75,11 @@ function readPage(): Page {
 
 /* ───────────────────────── app shell ───────────────────────── */
 
-/* Demo session only: no real authentication; the password is never stored. */
-type Session = { org: string; email: string; country: string };
-const SESSION_KEY = "sicklesignal.session";
-function loadSession(): Session | null {
-  try {
-    const raw = window.localStorage.getItem(SESSION_KEY);
-    return raw ? (JSON.parse(raw) as Session) : null;
-  } catch {
-    return null;
-  }
-}
-function saveSession(s: Session | null) {
-  try {
-    if (s) window.localStorage.setItem(SESSION_KEY, JSON.stringify(s));
-    else window.localStorage.removeItem(SESSION_KEY);
-  } catch {
-    /* storage unavailable: session lasts for this tab only */
-  }
-}
-
 export default function App() {
-  const [session, setSession] = useState<Session | null>(loadSession);
   const [page, setPage] = useState<Page>(readPage);
   const [countries, setCountries] = useState<string[]>([]);
-  const [country, setCountryState] = useState(session?.country ?? "");
-
-  const setCountry = (c: string) => {
-    setCountryState(c);
-    setSession((s) => {
-      if (!s) return s;
-      const next = { ...s, country: c };
-      saveSession(next);
-      return next;
-    });
-  };
-  const [month, setMonth] = useState(MONTHS[new Date().getMonth()]);
+  const [country, setCountryState] = useState("");
+  const setCountry = (c: string) => setCountryState(c);
   const [isSample, setIsSample] = useState(false);
 
   useEffect(() => {
@@ -131,26 +106,6 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  if (!session) {
-    return (
-      <Login
-        countries={countries}
-        isSample={isSample}
-        onLogin={(s) => {
-          saveSession(s);
-          setSession(s);
-          setCountryState(s.country);
-          go("hotspots");
-        }}
-      />
-    );
-  }
-
-  const signOut = () => {
-    saveSession(null);
-    setSession(null);
-  };
-
   return (
     <div className="shell">
       <header className="mast">
@@ -174,43 +129,25 @@ export default function App() {
             ))}
           </nav>
           {isSample && <span className="stamp">Sample data</span>}
-          <div className="who">
-            <span className="who-org" title={session.email}>
-              {session.org}
-            </span>
-            <button className="who-out" onClick={signOut}>
-              Sign out
-            </button>
-          </div>
         </div>
       </header>
 
       <main className={`page ${page === "hotspots" ? "page-wide" : ""}`}>
-        {page === "stock" && (
-          <StockPage
-            countries={countries}
-            country={country}
-            setCountry={setCountry}
-          />
-        )}
         {page === "hotspots" && (
           <HotspotsPage
             onOpen={(c) => {
               setCountry(c);
-              go("stock");
+              go("reservoir");
             }}
-            onBlank={() => go("blank")}
+            onNext={(c) => {
+              setCountry(c);
+              go("reservoir");
+            }}
+            onSelect={setCountry}
           />
         )}
-        {page === "blank" && <BlankPage onBack={() => go("hotspots")} />}
-        {page === "briefing" && (
-          <BriefingPage
-            countries={countries}
-            country={country}
-            setCountry={setCountry}
-            month={month}
-            setMonth={setMonth}
-          />
+        {page === "reservoir" && (
+          <ReservoirPage country={country} onBack={() => go("hotspots")} />
         )}
       </main>
 
@@ -238,129 +175,6 @@ function BrandMark() {
         fill="var(--oxblood)"
       />
     </svg>
-  );
-}
-
-/* ───────────────────────── login ───────────────────────── */
-
-function Login({
-  countries,
-  isSample,
-  onLogin,
-}: {
-  countries: string[];
-  isSample: boolean;
-  onLogin: (s: Session) => void;
-}) {
-  const [org, setOrg] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [country, setCountry] = useState("");
-
-  useEffect(() => {
-    if (!country && countries.length) setCountry(countries[0]);
-  }, [countries, country]);
-
-  const ready =
-    org.trim() && email.includes("@") && password.length > 0 && country;
-
-  return (
-    <div className="login">
-      <section className="login-art">
-        <a className="brand" href="#/stock" aria-label="SickleSignal">
-          <BrandMark />
-          <span className="brand-word">
-            <em>Sickle</em>Signal
-          </span>
-        </a>
-        <h1>
-          See what the blood bank can give <em>before</em> the next crisis does.
-        </h1>
-        <p>
-          Modelled blood stock, sickle cell hotspots and field briefings for
-          charities running donation drives.
-        </p>
-        <div className="login-groups" aria-hidden>
-          {["O+", "A+", "B+", "AB+", "O−", "A−", "B−", "AB−"].map((g, i) => (
-            <span
-              key={g}
-              style={
-                {
-                  "--lvl": `${[42, 64, 58, 80, 22, 70, 55, 86][i]}%`,
-                } as CSSProperties
-              }
-            >
-              {g}
-            </span>
-          ))}
-        </div>
-        {isSample && <span className="stamp">Sample data</span>}
-      </section>
-
-      <form
-        className="login-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (ready) onLogin({ org: org.trim(), email: email.trim(), country });
-        }}
-      >
-        <p className="eyebrow">Charity sign-in</p>
-        <h2>Open your blood bank</h2>
-        <label className="field">
-          <span>Organisation</span>
-          <input
-            value={org}
-            onChange={(e) => setOrg(e.target.value)}
-            placeholder="e.g. Sickle Cell Society"
-            autoComplete="organization"
-          />
-        </label>
-        <label className="field">
-          <span>Email</span>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@charity.org"
-            autoComplete="email"
-          />
-        </label>
-        <label className="field">
-          <span>Password</span>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-          />
-        </label>
-        <label className="field">
-          <span>Which country's blood bank?</span>
-          <span className="select-wrap select-sm select-field">
-            <select
-              value={country}
-              onChange={(e) => setCountry(e.target.value)}
-            >
-              {countries.length === 0 && (
-                <option value="">Loading countries…</option>
-              )}
-              {countries.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </span>
-        </label>
-        <button className="btn btn-wide" disabled={!ready}>
-          Enter the blood bank →
-        </button>
-        <p className="fine">
-          Demo sign-in: nothing is checked or sent to a server, and the password
-          isn't stored. You can switch country any time after signing in.
-        </p>
-      </form>
-    </div>
   );
 }
 
@@ -543,10 +357,18 @@ function StockPage({
         {(result?.stock ?? placeholderStock()).map((s) => (
           <BloodBag
             key={s.blood_type}
-            s={s}
+            type={s.blood_type}
+            days={s.days_of_cover}
+            status={s.status}
             target={target}
             max={bagMax}
             ghost={!result}
+            caption={
+              <span className="bag-units">
+                <b>{fmt(s.units_after_crisis.p50)}</b> / {fmt(s.target_units)}{" "}
+                units
+              </span>
+            }
           />
         ))}
       </section>
@@ -751,31 +573,37 @@ function placeholderStock(): BloodTypeStock[] {
 }
 
 function BloodBag({
-  s,
+  type,
+  days,
+  status,
   target,
   max,
   ghost,
+  caption,
 }: {
-  s: BloodTypeStock;
+  type: string;
+  days: Percentiles;
+  status: StockStatus;
   target: number;
   max: number;
   ghost: boolean;
+  caption?: ReactNode;
 }) {
   const clip = useId().replace(/:/g, "");
   const top = 34;
   const bottom = 146;
   const h = bottom - top;
-  const fill = clamp(s.days_of_cover.p50 / max, 0, 1);
+  const fill = clamp(days.p50 / max, 0, 1);
   const level = bottom - fill * h;
   const targetY = bottom - clamp(target / max, 0, 1) * h;
-  const label = s.blood_type.replace("-", "−");
+  const label = type.replace("-", "−");
 
   return (
-    <figure className={`bag bag-${s.status} ${ghost ? "is-ghost" : ""}`}>
+    <figure className={`bag bag-${status} ${ghost ? "is-ghost" : ""}`}>
       <svg
         viewBox="0 0 100 176"
         role="img"
-        aria-label={`${label}: ${fmtDays(s.days_of_cover.p50)} days`}
+        aria-label={`${label}: ${fmtDays(days.p50)} days`}
       >
         <defs>
           <clipPath id={clip}>
@@ -846,19 +674,14 @@ function BloodBag({
         </text>
       </svg>
       <figcaption>
-        <span className="bag-days">
-          {ghost ? "–" : fmtDays(s.days_of_cover.p50)}
-        </span>
+        <span className="bag-days">{ghost ? "–" : fmtDays(days.p50)}</span>
         <span className="bag-unit">days</span>
         {!ghost && (
           <>
             <span className="bag-range">
-              {fmtDays(s.days_of_cover.p10)}–{fmtDays(s.days_of_cover.p90)}
+              {fmtDays(days.p10)}–{fmtDays(days.p90)}
             </span>
-            <span className="bag-units">
-              <b>{fmt(s.units_after_crisis.p50)}</b> / {fmt(s.target_units)}{" "}
-              units
-            </span>
+            {caption}
           </>
         )}
       </figcaption>
@@ -1078,11 +901,11 @@ const GEO = africaGeo as unknown as {
 
 // Five heat classes, like the reference map's legend: a country is filled with its class.
 const HEAT_CLASSES = [
-  { min: 0.4, label: "Highest", color: "#D4141B", ink: "#fff" },
-  { min: 0.2, label: "High", color: "#EA4A3C", ink: "#fff" },
-  { min: 0.1, label: "Medium", color: "#F59A82", ink: "#4a1b14" },
-  { min: 0.03, label: "Lower", color: "#F9CDBE", ink: "#4a1b14" },
-  { min: 0, label: "Lowest", color: "#FDEDE6", ink: "#4a1b14" },
+  { min: 0.4, label: "Highest", color: "#6E0A12", ink: "#fff" },
+  { min: 0.2, label: "High", color: "#A3161C", ink: "#fff" },
+  { min: 0.1, label: "Medium", color: "#CF3A2E", ink: "#fff" },
+  { min: 0.03, label: "Lower", color: "#EC8466", ink: "#3a0d08" },
+  { min: 0, label: "Lowest", color: "#F6C3B0", ink: "#3a0d08" },
 ];
 const heatClass = (h: number) =>
   HEAT_CLASSES.find((c) => h >= c.min) ?? HEAT_CLASSES[HEAT_CLASSES.length - 1];
@@ -1096,20 +919,162 @@ const fmtBig = (n: number) => {
   return String(Math.round(n));
 };
 
+/* ── map zoom: +/− buttons, pinch, Ctrl/⌘ + scroll, double-click; drag to pan ── */
+
+type MapView = { x: number; y: number; w: number; h: number };
+const MAX_ZOOM = 10;
+
+function useMapZoom(W: number, H: number) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [view, setView] = useState<MapView>({ x: 0, y: 0, w: W, h: H });
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const gesture = useRef({ moved: false, dist: 0, sx: 0, sy: 0 });
+
+  const clampView = (v: MapView): MapView => {
+    const w = Math.min(W, Math.max(W / MAX_ZOOM, v.w));
+    const h = (w * H) / W;
+    return {
+      x: Math.min(W - w, Math.max(0, v.x)),
+      y: Math.min(H - h, Math.max(0, v.y)),
+      w,
+      h,
+    };
+  };
+
+  /** Screen point -> map units, matching the SVG's default "xMidYMid meet" fit. */
+  const toMap = (cx: number, cy: number) => {
+    const svg = svgRef.current;
+    if (!svg) return null;
+    const r = svg.getBoundingClientRect();
+    const v = viewRef.current;
+    const s = Math.min(r.width / v.w, r.height / v.h);
+    const ox = (r.width - v.w * s) / 2;
+    const oy = (r.height - v.h * s) / 2;
+    return { x: v.x + (cx - r.left - ox) / s, y: v.y + (cy - r.top - oy) / s, s };
+  };
+
+  /** Zoom by `factor` (>1 = in) keeping the point under (cx, cy) fixed. */
+  const zoomAt = (factor: number, cx?: number, cy?: number) => {
+    const v = viewRef.current;
+    let px = v.x + v.w / 2;
+    let py = v.y + v.h / 2;
+    if (cx !== undefined && cy !== undefined) {
+      const p = toMap(cx, cy);
+      if (p) ({ x: px, y: py } = p);
+    }
+    const w = Math.min(W, Math.max(W / MAX_ZOOM, v.w / factor));
+    const f = w / v.w;
+    const next = clampView({ x: px - (px - v.x) * f, y: py - (py - v.y) * f, w, h: (w * H) / W });
+    viewRef.current = next;
+    setView(next);
+  };
+
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    // Plain scrolling keeps scrolling the page; Ctrl/⌘ + scroll (and trackpad pinch,
+    // which browsers report as Ctrl + wheel) zooms the map.
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      zoomAt(Math.exp(-e.deltaY * 0.0025), e.clientX, e.clientY);
+    };
+    svg.addEventListener("wheel", onWheel, { passive: false });
+    return () => svg.removeEventListener("wheel", onWheel);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const onPointerDown = (e: ReactPointerEvent<SVGSVGElement>) => {
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.current.size === 1)
+      gesture.current = { moved: false, dist: 0, sx: e.clientX, sy: e.clientY };
+    if (pointers.current.size === 2) {
+      const [a, b] = [...pointers.current.values()];
+      gesture.current.dist = Math.hypot(a.x - b.x, a.y - b.y);
+    }
+  };
+  const onPointerMove = (e: ReactPointerEvent<SVGSVGElement>) => {
+    const prev = pointers.current.get(e.pointerId);
+    if (!prev) return;
+    const cur = { x: e.clientX, y: e.clientY };
+    pointers.current.set(e.pointerId, cur);
+    const g = gesture.current;
+    if (pointers.current.size === 2) {
+      // Pinch: zoom by the change in finger distance, around the midpoint.
+      const [a, b] = [...pointers.current.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (g.dist > 0) zoomAt(d / g.dist, (a.x + b.x) / 2, (a.y + b.y) / 2);
+      g.dist = d;
+      g.moved = true;
+      return;
+    }
+    const v = viewRef.current;
+    if (v.w >= W) return; // nothing to pan when fully zoomed out
+    if (!g.moved && Math.hypot(cur.x - g.sx, cur.y - g.sy) < 5) return;
+    if (!g.moved) {
+      g.moved = true;
+      // Capture only once dragging, so an ordinary tap still reaches the country.
+      e.currentTarget.setPointerCapture(e.pointerId);
+    }
+    const s = toMap(cur.x, cur.y)?.s ?? 1;
+    const next = clampView({ ...v, x: v.x - (cur.x - prev.x) / s, y: v.y - (cur.y - prev.y) / s });
+    viewRef.current = next;
+    setView(next);
+  };
+  const onPointerEnd = (e: ReactPointerEvent<SVGSVGElement>) => {
+    pointers.current.delete(e.pointerId);
+    if (pointers.current.size < 2) gesture.current.dist = 0;
+  };
+
+  const zoom = W / view.w;
+  return {
+    svgRef,
+    viewBox: `${view.x} ${view.y} ${view.w} ${view.h}`,
+    zoom,
+    zoomIn: () => zoomAt(1.6),
+    zoomOut: () => zoomAt(1 / 1.6),
+    reset: () => {
+      const full = { x: 0, y: 0, w: W, h: H };
+      viewRef.current = full;
+      setView(full);
+    },
+    /** True right after a drag or pinch, so it isn't treated as a tap. */
+    wasDrag: () => gesture.current.moved,
+    handlers: {
+      onPointerDown,
+      onPointerMove,
+      onPointerUp: onPointerEnd,
+      onPointerCancel: onPointerEnd,
+      onDoubleClick: (e: ReactMouseEvent<SVGSVGElement>) => zoomAt(2, e.clientX, e.clientY),
+    },
+  };
+}
+
 function HotspotsPage({
   onOpen: _onOpen,
-  onBlank,
+  onNext,
+  onSelect,
 }: {
   onOpen: (country: string) => void;
-  onBlank: () => void;
+  onNext: (country: string) => void;
+  onSelect?: (country: string) => void;
 }) {
   const [data, setData] = useState<HotspotsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sel, setSel] = useState<string | null>(null);
+  // Keep the app-wide country in step with the map, so the reservoir tab opens on it.
+  useEffect(() => {
+    if (sel) onSelect?.(sel);
+  }, [sel]); // eslint-disable-line react-hooks/exhaustive-deps
   const [tip, setTip] = useState<{ name: string; x: number; y: number } | null>(
     null,
   );
   const figRef = useRef<HTMLElement>(null);
+  const mz = useMapZoom(GEO.w, GEO.h);
+  const pick = (name: string) => {
+    if (!mz.wasDrag()) setSel(name);
+  };
 
   useEffect(() => {
     getHotspots()
@@ -1155,23 +1120,30 @@ function HotspotsPage({
             disease. Tap a country to see its numbers.
           </p>
         </div>
-        <button className="btn ah-next" onClick={onBlank}>
-          Next page →
+        <button
+          className="btn ah-next"
+          onClick={() => sel && onNext(sel)}
+          disabled={!sel}
+        >
+          {sel ? `${sel}'s blood reservoir →` : "Next page →"}
         </button>
       </header>
 
       <div className="atlas">
         <figure className="map-card" ref={figRef}>
           <figcaption className="map-top">
-            <span>Tap a country</span>
-            <span className="map-top-note">Shade = people living with SCD</span>
+            <span>Tap a country · pinch, Ctrl + scroll or + / − to zoom</span>
+            <span className="map-top-note">Shade = people living with Sickle Cell Disease</span>
           </figcaption>
+          <div className="map-stage">
           <svg
-            viewBox={`0 0 ${GEO.w} ${GEO.h}`}
-            className="map"
+            ref={mz.svgRef}
+            viewBox={mz.viewBox}
+            className={`map ${mz.zoom > 1.01 ? "is-zoomed" : ""}`}
             role="img"
             aria-label="Map of Africa, each country shaded by people living with sickle cell disease"
             onMouseLeave={() => setTip(null)}
+            {...mz.handlers}
           >
             <rect width={GEO.w} height={GEO.h} className="sea" />
             <path d={GEO.context} className="ctx" />
@@ -1183,7 +1155,7 @@ function HotspotsPage({
                   d={g.d}
                   className={`ctry ${it ? "has-data" : "no-data"}`}
                   style={it ? { fill: heatColor(it.heat) } : undefined}
-                  onClick={() => it && setSel(g.name)}
+                  onClick={() => it && pick(g.name)}
                   onMouseMove={(e) => showTip(e, g.name)}
                   tabIndex={it ? 0 : -1}
                   role={it ? "button" : undefined}
@@ -1202,10 +1174,10 @@ function HotspotsPage({
                   key={`dot-${g.name}`}
                   cx={g.cx}
                   cy={g.cy}
-                  r={5}
+                  r={5 / mz.zoom}
                   className="island"
                   style={{ fill: heatColor(byName.get(g.name)!.heat) }}
-                  onClick={() => setSel(g.name)}
+                  onClick={() => pick(g.name)}
                   onMouseMove={(e) => showTip(e, g.name)}
                 />
               ))}
@@ -1214,17 +1186,29 @@ function HotspotsPage({
             ))}
             {selectedGeo[0] && (
               <g className="signal" pointerEvents="none">
-                <circle cx={selectedGeo[0].cx} cy={selectedGeo[0].cy} r={5} />
-                <circle cx={selectedGeo[0].cx} cy={selectedGeo[0].cy} r={5} />
+                <circle cx={selectedGeo[0].cx} cy={selectedGeo[0].cy} r={5 / mz.zoom} />
+                <circle cx={selectedGeo[0].cx} cy={selectedGeo[0].cy} r={5 / mz.zoom} />
                 <circle
                   cx={selectedGeo[0].cx}
                   cy={selectedGeo[0].cy}
-                  r={3.4}
+                  r={3.4 / mz.zoom}
                   className="signal-dot"
                 />
               </g>
             )}
           </svg>
+          <div className="map-zoom" role="group" aria-label="Map zoom">
+            <button onClick={mz.zoomIn} disabled={mz.zoom >= MAX_ZOOM - 0.01} aria-label="Zoom in">
+              +
+            </button>
+            <button onClick={mz.zoomOut} disabled={mz.zoom <= 1.01} aria-label="Zoom out">
+              −
+            </button>
+            <button onClick={mz.reset} disabled={mz.zoom <= 1.01} aria-label="Show all of Africa" title="Show all of Africa">
+              ⤢
+            </button>
+          </div>
+          </div>
           {tip && (
             <div className="map-tip" style={{ left: tip.x, top: tip.y }}>
               <b>{tip.name}</b>
@@ -1304,20 +1288,393 @@ function HotspotsPage({
   );
 }
 
-function BlankPage({ onBack }: { onBack: () => void }) {
+/* ───────────────────────── reservoir page ───────────────────────── */
+
+const SCD_BANDS: { id: string; label: string }[] = [
+  { id: "under_5", label: "Under 5" },
+  { id: "age_5_14", label: "5–14" },
+  { id: "age_15_24", label: "15–19" },
+  { id: "age_25_plus", label: "20+" },
+];
+
+const fmtRate = (v: number) =>
+  v >= 100 ? fmt(v) : v >= 10 ? v.toFixed(0) : v >= 1 ? v.toFixed(1) : v.toFixed(2);
+
+function SourceTag({ assumed }: { assumed: boolean }) {
   return (
-    <section className="hero hero-left">
-      <p className="eyebrow">Next page</p>
-      <h1 className="hero-title">
-        <em>Blank</em> for now
-      </h1>
-      <p className="hero-sub">This page is reserved for what we build next.</p>
-      <div className="hero-actions">
-        <button className="btn" onClick={onBack}>
-          ← Back to hotspots
-        </button>
+    <span className={`src-tag ${assumed ? "is-assumed" : ""}`}>
+      {assumed ? "Assumption" : "Sourced"}
+    </span>
+  );
+}
+
+function ReservoirPage({
+  country,
+  onBack,
+}: {
+  country: string;
+  onBack: () => void;
+}) {
+  const [shareInCare, setShareInCare] = useState(0.3);
+  const [r, setR] = useState<ReservoirResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!country) return;
+    let live = true;
+    setLoading(true);
+    const t = window.setTimeout(() => {
+      getReservoir(country, shareInCare)
+        .then((d) => {
+          if (!live) return;
+          setR(d);
+          setError(null);
+        })
+        .catch((e) => live && setError(String(e)))
+        .finally(() => live && setLoading(false));
+    }, 200);
+    return () => {
+      live = false;
+      window.clearTimeout(t);
+    };
+  }, [country, shareInCare]);
+
+  const target = r?.target_days ?? 6;
+  const ghostDays: Percentiles = { p10: 0, p50: 0, p90: 0 };
+  const types = r?.types ?? [];
+  const maxRate = Math.max(
+    1,
+    ...types.map((t) => Math.max(t.donated_per_day.p50, t.demand_per_day.p50)),
+  );
+  const short = types
+    .filter((t) => t.extra_donations_per_day.p50 >= 0.5)
+    .sort((a, b) => b.extra_donations_per_day.p50 - a.extra_donations_per_day.p50);
+  const totalExtra = types.reduce((a, t) => a + t.extra_donations_per_day.p50, 0);
+
+  return (
+    <>
+      <section className="hero">
+        <p className="eyebrow">
+          Modelled blood reservoir <span className="dot-sep">·</span>
+          <span className={`live ${loading ? "is-busy" : ""}`}>
+            {loading ? "re-running 10,000 draws" : "not live stock"}
+          </span>
+        </p>
+        <div className="hero-place">
+          Blood stock levels across
+          <em className="hero-country">{country || "…"}</em>
+        </div>
+        <p className="hero-sub">
+          How many days each blood group could hold, given what{" "}
+          {country || "this country"} collects and what its hospitals and
+          sickle cell patients use. Big number: median. Small: P10–P90 range.
+          {r && (
+            <>
+              {" "}
+              Collections from <b>{r.data_year}</b>, the latest WHO year.
+            </>
+          )}
+        </p>
+      </section>
+
+      {error && <div className="alert">Couldn't load the reservoir: {error}</div>}
+
+      <section
+        className={`bags ${loading ? "is-busy" : ""}`}
+        aria-label="Modelled blood stock by group"
+      >
+        {r
+          ? r.types.map((t) => (
+              <BloodBag
+                key={t.blood_type}
+                type={t.blood_type}
+                days={t.days}
+                status={t.status}
+                target={target}
+                max={target}
+                ghost={false}
+                caption={
+                  <span className="bag-units">
+                    <b>{fmtRate(t.donated_per_day.p50)}</b> donated/day
+                  </span>
+                }
+              />
+            ))
+          : ["O+", "A+", "B+", "AB+", "O-", "A-", "B-", "AB-"].map((g) => (
+              <BloodBag
+                key={g}
+                type={g}
+                days={ghostDays}
+                status="ok"
+                target={target}
+                max={target}
+                ghost
+              />
+            ))}
+      </section>
+
+      <p className="target-note">
+        {country || "This country"} aims to retain <b>{fmtDays(target)} days</b> of
+        stock at any time. A full bag means that target is met.{" "}
+        {r && <SourceTag assumed={r.target_is_assumption} />}
+        {r && <span className="target-sub">{r.target_source}</span>}
+      </p>
+
+      <div className="split">
+        <section className="panel">
+          <header className="panel-head">
+            <span className="panel-key">A</span>
+            <h2>Donation rate by blood group</h2>
+            <p>
+              Whole-blood donations a day, split by the donor blood-group mix,
+              against the units each group is used at.
+            </p>
+          </header>
+          {r && (
+            <>
+              <p className="rate-total">
+                <b>{fmt(r.donated_per_day)}</b> donations a day nationally (
+                {r.donations_per_1000.toFixed(1)} per 1,000 people a year; WHO
+                minimum is 10){" "}
+                <SourceTag assumed={r.donations_is_assumption} />
+              </p>
+              <table className="rates">
+                <thead>
+                  <tr>
+                    <th>Group</th>
+                    <th>Donors</th>
+                    <th className="rates-bar-h">
+                      <span className="k-don">Donated</span> vs{" "}
+                      <span className="k-use">used</span> a day
+                    </th>
+                    <th title="Extra donations a day needed to cover use, after discards">
+                      Extra donors a day
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {types.map((t) => (
+                    <tr key={t.blood_type}>
+                      <th scope="row">{t.blood_type.replace("-", "−")}</th>
+                      <td>{(t.donor_share * 100).toFixed(1)}%</td>
+                      <td className="rates-bar">
+                        <span
+                          className="bar bar-don"
+                          style={{ width: `${(t.donated_per_day.p50 / maxRate) * 100}%` }}
+                        />
+                        <span
+                          className="bar bar-use"
+                          style={{ width: `${(t.demand_per_day.p50 / maxRate) * 100}%` }}
+                        />
+                        <small>
+                          {fmtRate(t.donated_per_day.p50)} vs{" "}
+                          {fmtRate(t.demand_per_day.p50)}
+                        </small>
+                      </td>
+                      <td>
+                        {t.extra_donations_per_day.p50 < 0.5 ? (
+                          <span className="chip chip-ok">covered</span>
+                        ) : (
+                          <>
+                            <b>{fmtRate(t.extra_donations_per_day.p50)}</b>
+                            <small className="rates-range">
+                              {fmtRate(t.extra_donations_per_day.p10)}–
+                              {fmtRate(t.extra_donations_per_day.p90)}
+                            </small>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="fine">
+                Blood-group mix: {r.blood_type_source}.{" "}
+                <SourceTag assumed={r.blood_type_is_assumption} />
+                {r.donations_note && <> {r.donations_note}.</>}
+              </p>
+            </>
+          )}
+        </section>
+
+        <section className="panel">
+          <header className="panel-head">
+            <span className="panel-key">B</span>
+            <h2>Sickle cell pull on the reservoir</h2>
+            <p>
+              Units a day used by people with SCD who are in care, by age.
+              Children are transfused by body weight.
+            </p>
+          </header>
+          {r && (
+            <>
+              <dl className="res-rows">
+                <div>
+                  <dt>People living with SCD, {r.scd_data_year}</dt>
+                  <dd>{fmtBig(r.scd_patients)}</dd>
+                </div>
+                <div>
+                  <dt>SCD units a day</dt>
+                  <dd>
+                    {fmtRate(r.scd_demand_per_day.p50)}
+                    <small>
+                      {" "}
+                      ({fmtRate(r.scd_demand_per_day.p10)}–
+                      {fmtRate(r.scd_demand_per_day.p90)})
+                    </small>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Share of all blood used</dt>
+                  <dd>
+                    {pct(r.scd_share_of_demand.p50)}
+                    <small>
+                      {" "}
+                      ({pct(r.scd_share_of_demand.p10)}–
+                      {pct(r.scd_share_of_demand.p90)})
+                    </small>
+                  </dd>
+                </div>
+              </dl>
+              <ul className="scd-ages">
+                {SCD_BANDS.map((b) => {
+                  const a = r.scd_by_age[b.id];
+                  if (!a) return null;
+                  const w = r.scd_demand_per_day.p50
+                    ? (a.units_per_day.p50 / r.scd_demand_per_day.p50) * 100
+                    : 0;
+                  return (
+                    <li key={b.id}>
+                      <span>{b.label}</span>
+                      <span className="scd-bar">
+                        <i style={{ width: `${w}%` }} />
+                      </span>
+                      <b>{fmtRate(a.units_per_day.p50)}</b>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+          <Dial
+            label="People with SCD in care"
+            value={shareInCare}
+            min={0}
+            max={1}
+            step={0.05}
+            format={pct}
+            hint="Assumption: only diagnosed patients in care draw on the blood bank"
+            onChange={setShareInCare}
+          />
+          {r && (
+            <p className="fine">
+              {short.length === 0
+                ? "Every group covers its use under this scenario."
+                : `To reach the target, ${country} needs about ${fmt(totalExtra)} more donations a day, most of all ${short
+                    .slice(0, 3)
+                    .map((t) => t.blood_type.replace("-", "−"))
+                    .join(", ")}.`}
+            </p>
+          )}
+        </section>
       </div>
-    </section>
+
+      <section className="assume">
+        <h3>What's sourced and what's assumed</h3>
+        <p>
+          These are <b>modelled</b> stock levels, not live blood-bank figures.
+          Days of stock = the national target × (usable donations ÷ use),
+          capped at the target. <b>Sourced:</b> whole-blood donations (WHO Global
+          status report 2021, Annex 3), population (World Bank), blood-group mix
+          where a national study exists, South Africa's 5-day target (SANBS),
+          the share of units discarded (WHO Africa 2022 survey) and people
+          living with SCD by age (GBD). <b>Calibrated:</b> everyday (non-sickle
+          cell) blood need
+          {r && (
+            <>
+              {" "}
+              of {r.need_per_1000.min.toFixed(1)}–{r.need_per_1000.max.toFixed(1)}{" "}
+              donations per 1,000 people a year
+            </>
+          )}
+          , fitted to published national requirements (below).{" "}
+          <b>Assumed:</b> the 6-day target where no country policy is
+          published, the extra pull on O−, and the share of SCD patients in
+          care. See <code>docs/METHOD.md</code>.
+        </p>
+        <CalibrationCheck />
+        <div className="hero-actions">
+          <button className="btn" onClick={onBack}>
+            ← Back to hotspots
+          </button>
+        </div>
+      </section>
+    </>
+  );
+}
+
+/** Published national requirements the need is calibrated to, against the model. */
+function CalibrationCheck() {
+  const [cal, setCal] = useState<CalibrationResponse | null>(null);
+  useEffect(() => {
+    getCalibration()
+      .then(setCal)
+      .catch(() => setCal(null));
+  }, []);
+  if (!cal) return null;
+  return (
+    <div className="calib">
+      <p className="calib-head">
+        Calibration check: published yearly requirement vs this model
+      </p>
+      <table className="rates calib-table">
+        <thead>
+          <tr>
+            <th>Country</th>
+            <th>Published</th>
+            <th>Model (likely range)</th>
+            <th>Fit</th>
+          </tr>
+        </thead>
+        <tbody>
+          {cal.rows.map((c) => {
+            const m = c.modelled_units;
+            const inside = c.requirement_units >= m.p10 && c.requirement_units <= m.p90;
+            const off = (m.p50 - c.requirement_units) / c.requirement_units;
+            return (
+              <tr key={c.country}>
+                <td>
+                  <a href={c.url} target="_blank" rel="noreferrer" title={c.note}>
+                    {c.country.replace("United Republic of ", "")}
+                  </a>{" "}
+                  <small className="rates-range">
+                    {c.year} · {c.source}
+                  </small>
+                </td>
+                <td>{fmtBig(c.requirement_units)}</td>
+                <td>
+                  {fmtBig(m.p50)}
+                  <small className="rates-range">
+                    {fmtBig(m.p10)}–{fmtBig(m.p90)}
+                  </small>
+                </td>
+                <td>
+                  <span className={`chip ${inside ? "chip-ok" : "chip-low"}`}>
+                    {inside ? "in range" : `${off > 0 ? "+" : "−"}${Math.round(Math.abs(off) * 100)}%`}
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <p className="fine">
+        Most national figures are themselves worked out from WHO's rule of
+        thumb (10 per 1,000 people); Tanzania's is the only one measured in
+        hospitals. Hover a country for its note.
+      </p>
+    </div>
   );
 }
 

@@ -65,6 +65,100 @@ export interface HotspotsResponse {
   items: HotspotItem[];
 }
 
+export interface ReservoirType {
+  blood_type: string;
+  /** Share of donors with this type (0-1). */
+  donor_share: number;
+  /** Whole-blood donations of this type collected per day. */
+  donated_per_day: Percentiles;
+  /** Donations left after discards (expiry, infection screening, ...). */
+  usable_per_day: Percentiles;
+  /** Units of this type used per day (all-cause need + SCD). */
+  demand_per_day: Percentiles;
+  scd_demand_per_day: Percentiles;
+  supply_ratio: Percentiles;
+  /** Days of stock this type could sustain, capped at the national target. */
+  days: Percentiles;
+  /** 0-1: P50 days as a share of the target. */
+  fill: number;
+  status: StockStatus;
+  /** Extra donations per day needed to cover demand. */
+  extra_donations_per_day: Percentiles;
+}
+
+export interface ReservoirResponse {
+  country: string;
+  data_year: number;
+  scd_data_year: number;
+  target_days: number;
+  target_source: string;
+  target_is_assumption: boolean;
+  blood_type_source: string;
+  blood_type_is_assumption: boolean;
+  donations_source: string;
+  donations_is_assumption: boolean;
+  donations_note: string;
+  population: number;
+  donations_per_year: number;
+  donations_per_1000: number;
+  share_in_care: number;
+  /** General (non-SCD) need per 1000 people a year, calibrated. */
+  need_per_1000: NeedRange;
+  scd_patients: number;
+  scd_by_age: Record<string, { patients: number; units_per_day: Percentiles }>;
+  donated_per_day: number;
+  usable_per_day: Percentiles;
+  demand_per_day: Percentiles;
+  scd_demand_per_day: Percentiles;
+  scd_share_of_demand: Percentiles;
+  types: ReservoirType[];
+}
+
+export interface NeedRange {
+  min: number;
+  mode: number;
+  max: number;
+}
+
+export interface CalibrationRow {
+  country: string;
+  year: number;
+  /** Published national requirement, units a year. */
+  requirement_units: number;
+  population: number;
+  scd_units: number;
+  implied_need_per_1000: number;
+  /** What the calibrated model gives for that country and year. */
+  modelled_units: Percentiles;
+  source: string;
+  url: string;
+  note: string;
+}
+
+export interface CalibrationResponse {
+  need_per_1000: NeedRange;
+  rows: CalibrationRow[];
+}
+
+export async function getCalibration(): Promise<CalibrationResponse> {
+  const res = await fetch("/api/calibration");
+  if (!res.ok) throw new Error(`/api/calibration failed: ${res.status}`);
+  return res.json();
+}
+
+export async function getReservoir(
+  country: string,
+  shareInCare: number,
+): Promise<ReservoirResponse> {
+  const q = new URLSearchParams({
+    country,
+    share_in_care: String(shareInCare),
+  });
+  const res = await fetch(`/api/reservoir?${q}`);
+  if (!res.ok) throw new Error(`/api/reservoir failed: ${res.status}`);
+  return res.json();
+}
+
 export interface BriefingItem {
   text: string;
   confidence: string;

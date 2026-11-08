@@ -75,6 +75,77 @@ class HotspotsResponse(BaseModel):
     items: list[HotspotItem]
 
 
+class ReservoirType(BaseModel):
+    blood_type: str
+    donor_share: float
+    donated_per_day: Percentiles
+    usable_per_day: Percentiles
+    demand_per_day: Percentiles
+    scd_demand_per_day: Percentiles
+    supply_ratio: Percentiles
+    days: Percentiles = Field(description="Days of stock this type could sustain")
+    fill: float = Field(description="0-1: P50 days as a share of the national target")
+    status: str = Field(description="ok | low | critical")
+    extra_donations_per_day: Percentiles
+
+
+class ScdBand(BaseModel):
+    patients: float
+    units_per_day: Percentiles
+
+
+class NeedRange(BaseModel):
+    min: float
+    mode: float
+    max: float
+
+
+class CalibrationRow(BaseModel):
+    country: str
+    year: int
+    requirement_units: float
+    population: float
+    scd_units: float
+    implied_need_per_1000: float
+    modelled_units: Percentiles
+    source: str
+    url: str
+    note: str
+
+
+class CalibrationResponse(BaseModel):
+    need_per_1000: NeedRange = Field(
+        description="General (non-SCD) whole-blood need per 1000 people a year, fitted")
+    rows: list[CalibrationRow]
+
+
+class ReservoirResponse(BaseModel):
+    country: str
+    data_year: int
+    scd_data_year: int
+    target_days: float
+    target_source: str
+    target_is_assumption: bool
+    blood_type_source: str
+    blood_type_is_assumption: bool
+    donations_source: str
+    donations_is_assumption: bool
+    donations_note: str
+    population: float
+    donations_per_year: float
+    donations_per_1000: float
+    share_in_care: float
+    need_per_1000: NeedRange
+    scd_patients: float
+    scd_by_age: dict[str, ScdBand]
+    donated_per_day: float
+    usable_per_day: Percentiles
+    demand_per_day: Percentiles
+    scd_demand_per_day: Percentiles
+    scd_share_of_demand: Percentiles
+    types: list[ReservoirType]
+
+
 class BriefingRequest(BaseModel):
     country: str
     month: str

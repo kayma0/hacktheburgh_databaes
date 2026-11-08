@@ -1,0 +1,5 @@
+country,year,requirement_units,population,source,url,note
+Ghana,2025,308000,35064272,"Ghana National Blood Service, via Graphic Online (7 Apr 2026)",https://www.graphic.com.gh/news/health/ghana-news-national-blood-service-meets-only-66-of-requirement.html,Stated national requirement
+Nigeria,2019,2000000,209485641,"Federal Ministry of Health, via ThisDay (14 Jun 2019)",https://thisdaylive.com/index.php/2019/06/14/health-ministry-nigeria-requires-2m-units-of-blood-per-annum,Derived by the ministry from the WHO 10 per 1000 rule; not an independent measurement
+Kenya,2022,520000,54252461,"Kenya Tissue and Transplant Authority, via The Star (21 Oct 2022)",https://www.the-star.co.ke/news/2022-10-21-blood-agency-targets-500k-units-in-effort-to-seal-demand-gap,Stated annual minimum need (about 1% of population)
+United Republic of Tanzania,2015,322530,52020962,"Drammeh B et al. 2018, Transfusion Medicine Reviews 32(1):36-42",https://doi.org/10.1016/j.tmrv.2017.07.004,Hospital survey: 6.2 donations per 1000 population; the only measured figure here

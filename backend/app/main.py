@@ -4,18 +4,21 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from . import hotspots as hotspots_mod
 from . import model
+from . import reservoir as reservoir_mod
 from .briefing import get_briefing
 from .data_loader import load_data
 from .schemas import (
     BriefingRequest,
     BriefingResponse,
+    CalibrationResponse,
     HotspotsResponse,
+    ReservoirResponse,
     SimulateRequest,
     SimulateResponse,
 )
@@ -102,6 +105,26 @@ def simulate(req: SimulateRequest):
 def hotspots():
     """Every country from data/raw.csv: people living with SCD, ranked by heat."""
     return hotspots_mod.compute_hotspots()
+
+
+@app.get("/api/calibration", response_model=CalibrationResponse)
+def calibration():
+    """General blood need per 1000 people, fitted to published national requirements,
+    and how the calibrated model compares with each of them."""
+    return reservoir_mod.calibrate_need()
+
+
+@app.get("/api/reservoir", response_model=ReservoirResponse)
+def reservoir(
+    country: str,
+    share_in_care: float = Query(reservoir_mod.DEFAULT_SHARE_IN_CARE, ge=0, le=1),
+):
+    """Modelled days of red-cell stock per blood type for one country, against that
+    country's reserve target, with donation rates per type and the SCD share of demand."""
+    try:
+        return reservoir_mod.compute_reservoir(country, share_in_care)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"No data for country: {country}")
 
 
 @app.post("/api/briefing", response_model=BriefingResponse)

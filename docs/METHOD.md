@@ -100,3 +100,98 @@ allocated the same way and interleaved so it does not cluster by age or sex. At 
 personas, AB- (0.4% global probability) rounds to zero. `blood_ml` is an ASSUMPTION:
 red cells for one acute episode, by weight-based dosing per age group (`meta.blood_ml_assumption`
 in the file has the min/mode/max).
+
+## Pre-built data files (`scripts/build_data.py`)
+
+Run `python scripts/build_data.py` to regenerate both files from the GBD exports in
+`data/`. No dependencies beyond the standard library; the output is deterministic.
+
+### `data/processed/heatmap.json`
+
+People living with SCD per country in the target year (default: the current year),
+projected from `data/raw.csv` by a log-linear trend fitted over the last 10 years of
+history and extrapolated past 2023. Fitted growth rates land between −3.1% and +4.0% a
+year, so no country's projection is implausible. Per country: `iso3` (for the map),
+`cases`, `cases_low`/`cases_high`, `growth_pct_per_year`, `intensity` and `bucket`.
+
+`cases_low`/`cases_high` carry the 2023 GBD 95% interval forward at its original
+relative width. It covers uncertainty in today's count but **not** in the trend, so it
+is a floor on the true uncertainty, narrower than the Monte Carlo interval
+`hotspots.py` produces for the same quantity.
+
+No population denominator is available in these exports, so the map shows **absolute
+cases, not prevalence per 100k**. For blood-supply planning that is the wanted quantity:
+units needed scale with the number of patients, not with how common the disease is.
+
+Cases span four orders of magnitude (0 in Seychelles to ≈3.0M in Nigeria), so
+`intensity` is log-scaled 0-1 (floored at 1 case) for direct use in a colour ramp — on a
+linear scale every country but Nigeria would be the same shade. `bucket` gives a fixed
+five-band legend (<1k / <10k / <100k / <500k / rest) that stays stable between runs;
+the thresholds are in `meta.scale.buckets`.
+
+## Blood reservoir page (`backend/app/reservoir.py`, reads `data/blood_supply.csv` + `data/male_raw.csv` / `data/female_raw.csv`)
+
+MODELLED stock levels, not live blood-bank figures. One row per country in
+`data/blood_supply.csv` (all 54 hotspot countries), each value tagged with its source or
+`ASSUMPTION`:
+
+- **Whole-blood donations**: WHO *Global status report on blood safety and availability
+  2021*, Annex 3 (total whole-blood donations, latest year reported, mostly 2018; Seychelles,
+  Sudan and Zambia 2015). Each row was checked so total = voluntary + family/replacement +
+  paid + other (Seychelles' parts don't add up; its printed total is used). Nigeria is
+  flagged by WHO as partial national coverage. Djibouti, Equatorial Guinea, Guinea,
+  Guinea-Bissau, Sierra Leone and Somalia reported nothing: ASSUMPTION 5.2 per 1000 (WHO
+  AFRO 2022 survey regional average).
+- **Population**: World Bank `SP.POP.TOTL` for the same year as the donations.
+- **Blood-group mix (O+ ... AB-)**: Wikipedia, "Blood type distribution by country"
+  (a compilation of national studies) for 22 countries. Others: ASSUMPTION, the average of
+  the countries with data in the same sub-region (North Africa = UN M49 Northern Africa;
+  Egypt's source has no RhD-negative split so it uses the North African average).
+- **Reserve target (days)**: South Africa 5 days (SANBS: 5 days of stock per blood group).
+  No other national target was found: ASSUMPTION 6 days, as used by UK services.
+
+10,000 Monte Carlo draws (seed `20261107`), reported as P10/P50/P90:
+
+1. Donor mix per draw ~ Dirichlet around the country's shares (concentration 400 if
+   cited, 60 if assumed).
+2. Usable units/day = donations/365 × (1 − discard), discard ~ triangular(0.08, 0.156,
+   0.25). 15.6% = WHO AFRO 2022 survey (33 countries); the range is an ASSUMPTION.
+3. General (non-SCD) need/day = population × triangular(min, mode, max) per 1000 / 365,
+   **calibrated** (see below), currently about triangular(5.7, 7.3, 8.7).
+4. SCD load/day = GBD prevalence by age (male + female, same year as the donations) ×
+   share in care (slider, ASSUMPTION, default 30%) × transfusion events per patient-year
+   ~ triangular(0.30, 0.432, 0.60) (REACH) × units per transfusion by age (the app's
+   existing age bands; GBD 20+ uses the adult dose). Added to step 3; because step 3 is
+   calibrated with SCD use taken out, the two do not double count.
+5. Demand per group = total demand × donor share × pull weight (O- 2.2, AB 0.6-0.7, see
+   `model.py`), renormalised.
+6. Days of stock per group = target × min(usable ÷ demand, 1). ASSUMPTION: a service that
+   collects x% of what it uses can hold x% of its target buffer. Status: ok at the target,
+   low from 60% of it (SANBS: under 3 of 5 days is critical), critical below.
+7. Extra donations/day per group = (demand − usable) / (1 − discard), when positive.
+
+### Calibration of general need (`calibrate_need()`, `data/need_calibration.csv`, `GET /api/calibration`)
+
+General blood need is fitted to published national annual requirements rather than
+guessed. Each row of `data/need_calibration.csv` holds a country, year, stated requirement
+(units a year), World Bank population for that year, and the source:
+
+| Country | Year | Requirement | Source |
+| --- | --- | --- | --- |
+| Ghana | 2025 | 308,000 | Ghana National Blood Service (Graphic Online, 7 Apr 2026) |
+| Nigeria | 2019 | 2,000,000 | Federal Ministry of Health (ThisDay, 14 Jun 2019) |
+| Kenya | 2022 | 520,000 | Kenya Tissue and Transplant Authority minimum need (The Star, 21 Oct 2022) |
+| Tanzania | 2015 | 6.2 per 1000 (322,530) | Drammeh et al. 2018, *Transfusion Medicine Reviews* 32(1):36-42 |
+
+For each row: implied general need per 1000 = (requirement − modelled SCD use that year,
+step 4 at the default 30% in care) ÷ population × 1000. The need distribution is
+triangular(lowest, median, highest) of those implied rates. The calibrated model is then
+re-run for each calibration country; the page shows the result next to the published
+figure. Ghana and Nigeria land inside the model's P10–P90 range; Kenya is about 15% under
+and Tanzania about 25% over, because they set the edges of the range.
+
+Caveats: three of the four "requirements" are not independent measurements. Nigeria's is
+stated as the WHO 10-per-1000 rule applied to population, Kenya's is about 1% of
+population, and Ghana's is close to 9 per 1000. Only Tanzania's comes from a hospital
+survey. With four points the range is narrow and does not capture uncertainty in the
+targets themselves. Adding a country is one new row in the CSV; the fit updates on restart.
