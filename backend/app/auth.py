@@ -40,7 +40,7 @@ def current_user(authorization: str | None = Header(default=None)) -> str:
         raise HTTPException(status_code=503, detail="Sign-in is not configured on this server.")
     domain, audience = cfg
     if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=401, detail="Sign in to use saved plans.")
+        raise HTTPException(status_code=401, detail="Sign in first.")
     token = authorization[7:].strip()
     try:
         claims = jwt.decode(

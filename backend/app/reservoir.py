@@ -16,6 +16,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .blood import BLOOD_TYPES, DEFAULT_DEMAND_WEIGHTS, DEFAULT_UNITS_BY_AGE
 from .trends import (
     PROJECTION_YEAR,
     donation_trend,
@@ -23,25 +24,6 @@ from .trends import (
     project_age_sex,
     sample_donations_per_1000,
 )
-
-BLOOD_TYPES = ["O+", "A+", "B+", "AB+", "O-", "A-", "B-", "AB-"]
-
-# ASSUMPTION: how hard each group is pulled relative to its donor share.
-# O- is the emergency "universal" red-cell group; AB is rarely requested.
-DEFAULT_DEMAND_WEIGHTS = {
-    "O+": 1.1, "A+": 0.95, "B+": 0.95, "AB+": 0.7,
-    "O-": 2.2, "A-": 1.0, "B-": 1.0, "AB-": 0.6,
-}
-
-# ASSUMPTION: red-cell units per crisis transfusion by age. Children are dosed by
-# weight (~10-15 mL/kg; one adult unit is ~250-300 mL), so a toddler needs a
-# fraction of a unit and an adult 2-3. Exchange transfusions can need far more.
-DEFAULT_UNITS_BY_AGE = {
-    "under_5": {"min": 0.3, "mode": 0.6, "max": 1.0},
-    "age_5_14": {"min": 0.8, "mode": 1.3, "max": 2.2},
-    "age_15_24": {"min": 1.5, "mode": 2.2, "max": 3.5},
-    "age_25_plus": {"min": 1.5, "mode": 2.5, "max": 4.0},
-}
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 SUPPLY_CSV = DATA_DIR / "blood_supply.csv"

@@ -18,6 +18,7 @@ from datetime import date
 
 from . import travel_advice
 from .schemas import BriefingItem, BriefingResponse, BriefingSection
+from .timeout import call_with_timeout
 
 log = logging.getLogger(__name__)
 
@@ -154,18 +155,12 @@ def get_briefing(country: str) -> BriefingResponse:
         _cache[country] = result
         return result
 
-    from concurrent.futures import ThreadPoolExecutor
-
-    # Not a `with` block: its exit waits for the thread, which defeats the timeout.
-    pool = ThreadPoolExecutor(max_workers=1)
     try:
-        sections = pool.submit(_call_gemini, country, f).result(timeout=TIMEOUT_S)
+        sections = call_with_timeout(_call_gemini, TIMEOUT_S, country, f)
     except Exception as e:
         # Don't cache transient failures, so the next request retries Gemini.
         log.info("briefing %s: fixed list (gemini failed: %s: %s)", country, type(e).__name__, e)
         return _fallback(country, f)
-    finally:
-        pool.shutdown(wait=False)
 
     if not sections:
         return _fallback(country, f)

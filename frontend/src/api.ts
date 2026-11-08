@@ -1,3 +1,37 @@
+/* Typed client for the FastAPI backend (backend/app/main.py). Types mirror
+   backend/app/schemas.py. */
+
+/* The signed-in charity's Auth0 access token goes on every request; the server reads the
+   charity from it. Without Auth0 (local mode) there is no token and none is sent. */
+let tokenSource: () => Promise<string | null> = async () => null;
+
+export function setTokenSource(source: () => Promise<string | null>) {
+  tokenSource = source;
+}
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const token = await tokenSource();
+  const headers = new Headers(init.headers);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const res = await fetch(path, { ...init, headers });
+  if (!res.ok) {
+    // FastAPI puts the reason in `detail` (a string, or a list of validation errors).
+    const detail = await res.json().then((b) => b.detail, () => null);
+    const reason = typeof detail === "string" ? detail : Array.isArray(detail) ? detail[0]?.msg : null;
+    throw new Error(reason ?? `${path} failed: ${res.status}`);
+  }
+  return res.status === 204 ? (undefined as T) : res.json();
+}
+
+const getJson = <T>(path: string) => request<T>(path);
+const sendJson = <T>(method: "POST" | "PUT", path: string, body: unknown) =>
+  request<T>(path, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+const postJson = <T>(path: string, body: unknown) => sendJson<T>("POST", path, body);
+
 export interface Percentiles {
   p10: number;
   p50: number;
@@ -73,8 +107,8 @@ export interface ReservoirResponse {
   donation_history_years?: number[];
   donations_reported_year?: number | null;
   share_in_care: number;
-  /** General (non-SCD) need per 1000 people a year, calibrated. */
-  need_per_1000: NeedRange;
+  /** General (non-SCD) need per 1000 people a year: min, mode, max. */
+  need_per_1000: { min: number; mode: number; max: number };
   scd_patients: number;
   scd_by_age: Record<string, { patients: number; units_per_day: Percentiles }>;
   donated_per_day: number;
@@ -83,38 +117,6 @@ export interface ReservoirResponse {
   scd_demand_per_day: Percentiles;
   scd_share_of_demand: Percentiles;
   types: ReservoirType[];
-}
-
-export interface NeedRange {
-  min: number;
-  mode: number;
-  max: number;
-}
-
-export interface CalibrationRow {
-  country: string;
-  year: number;
-  /** Published national requirement, units a year. */
-  requirement_units: number;
-  population: number;
-  scd_units: number;
-  implied_need_per_1000: number;
-  /** What the calibrated model gives for that country and year. */
-  modelled_units: Percentiles;
-  source: string;
-  url: string;
-  note: string;
-}
-
-export interface CalibrationResponse {
-  need_per_1000: NeedRange;
-  rows: CalibrationRow[];
-}
-
-export async function getCalibration(): Promise<CalibrationResponse> {
-  const res = await fetch("/api/calibration");
-  if (!res.ok) throw new Error(`/api/calibration failed: ${res.status}`);
-  return res.json();
 }
 
 export interface PoolPatient {
@@ -187,12 +189,9 @@ export interface CrisisResponse {
   routine_use_per_day: Percentiles;
   target_days: number;
   o_neg_fallback: boolean;
-  crisis_first: boolean;
   /** O− units given to patients of other groups (O− fallback on). */
   o_neg_given_units: Percentiles;
   o_neg_patients_helped: number;
-  /** Units crisis patients took from other hospital patients (crisis-first on). */
-  routine_displaced_units: Percentiles;
   /** Median day the first patient goes without blood, in runs where anyone does. */
   first_short_day: number | null;
   share_runs_with_shortage: number;
@@ -203,12 +202,11 @@ export interface CrisisResponse {
 export interface CrisisOptions {
   /** Give O− when a patient's own group runs out. */
   oNegFallback: boolean;
-  /** Serve crisis patients before normal hospital use. */
-  crisisFirst: boolean;
+  /** Repeat an earlier run exactly; a new random run if left out. */
+  seed?: number;
 }
 
-/** A new random patient pool and simulation on every call. */
-export async function getCrisis(
+export function getCrisis(
   country: string,
   people: number,
   days: number,
@@ -219,27 +217,12 @@ export async function getCrisis(
     people: String(people),
     days: String(days),
     o_neg_fallback: String(opts.oNegFallback),
-    crisis_first: String(opts.crisisFirst),
   });
-  const res = await fetch(`/api/crisis?${q}`);
-  if (!res.ok) throw new Error(`/api/crisis failed: ${res.status}`);
-  return res.json();
+  if (opts.seed !== undefined) q.set("seed", String(opts.seed));
+  return getJson(`/api/crisis?${q}`);
 }
 
-export async function getReservoir(
-  country: string,
-  shareInCare: number,
-): Promise<ReservoirResponse> {
-  const q = new URLSearchParams({
-    country,
-    share_in_care: String(shareInCare),
-  });
-  const res = await fetch(`/api/reservoir?${q}`);
-  if (!res.ok) throw new Error(`/api/reservoir failed: ${res.status}`);
-  return res.json();
-}
-
-/* ── drive plan ── */
+/* ───────────── drive plan (backend/app/plan.py) ───────────── */
 
 export interface PlanGroup {
   blood_group: string;
@@ -269,22 +252,19 @@ export interface PlanAssumption {
   source: string;
 }
 
-export interface PlanParams {
-  share_in_care: number;
-  people: number;
-  days: number;
-  seed: number;
-  deferral: number;
-  donations_per_donor: number;
-  coverage: number;
-  o_neg_fallback: boolean;
-  crisis_first: boolean;
-}
-
 export interface PlanResponse {
   country: string;
   projection_year: number;
-  params: PlanParams;
+  params: {
+    share_in_care: number;
+    people: number;
+    days: number;
+    seed: number;
+    deferral: number;
+    donations_per_donor: number;
+    coverage: number;
+    o_neg_fallback: boolean;
+  };
   verdict: "enough" | "at_risk" | "not_enough";
   p_all_served: number;
   patients_unserved: Percentiles;
@@ -296,80 +276,40 @@ export interface PlanResponse {
   groups: PlanGroup[];
   totals: { donors_ongoing: Percentiles; donors_surge: Percentiles };
   assumptions: PlanAssumption[];
-  ask: string;
   disclaimer: string;
 }
 
+/** The crisis the plan is built on (page 2's simulation) and the drive assumptions. */
 export interface PlanInputs {
   country: string;
   people: number;
   days: number;
+  oNegFallback: boolean;
+  /** The crisis run's seed, so the plan describes that exact simulation. */
+  seed: number;
   deferral: number;
   donationsPerDonor: number;
   coverage: number;
-  oNegFallback: boolean;
-  crisisFirst: boolean;
 }
 
-export async function getPlan(i: PlanInputs): Promise<PlanResponse> {
-  const q = new URLSearchParams({
+const planParams = (i: PlanInputs) =>
+  new URLSearchParams({
     country: i.country,
     people: String(i.people),
     days: String(i.days),
     deferral: String(i.deferral),
     donations_per_donor: String(i.donationsPerDonor),
     coverage: String(i.coverage),
-    o_neg_fallback: String(i.oNegFallback),
-    crisis_first: String(i.crisisFirst),
   });
-  const res = await fetch(`/api/plan?${q}`);
-  if (!res.ok) throw new Error(`/api/plan failed: ${res.status}`);
-  return res.json();
+
+export function getPlan(i: PlanInputs): Promise<PlanResponse> {
+  const q = planParams(i);
+  q.set("seed", String(i.seed));
+  q.set("o_neg_fallback", String(i.oNegFallback));
+  return getJson(`/api/plan?${q}`);
 }
 
-/* ── appeal writer ── */
-
-export type AppealChannel = "social" | "email" | "sms" | "poster";
-export type AppealTone = "warm" | "urgent" | "formal";
-export type AppealLanguage = "English" | "French" | "Portuguese" | "Swahili" | "Arabic" | "Hausa";
-
-export interface AppealResponse {
-  text: string;
-  channel: AppealChannel;
-  tone: AppealTone;
-  language: AppealLanguage;
-  source: "gemini" | "template";
-  /** Set when source is "template": no_api_key | gemini_unavailable | failed_checks. */
-  fallback_reason: string | null;
-  note: string | null;
-  facts_used: { groups: string[]; regular: string | null; oneoff: string | null };
-}
-
-export interface AppealInputs extends PlanInputs {
-  channel: AppealChannel;
-  tone: AppealTone;
-  language: AppealLanguage;
-  details: { organisation: string; date: string; venue: string; contact: string };
-}
-
-export function writeAppeal(i: AppealInputs): Promise<AppealResponse> {
-  return postJson("/api/appeal", {
-    country: i.country,
-    channel: i.channel,
-    tone: i.tone,
-    language: i.language,
-    details: i.details,
-    people: i.people,
-    days: i.days,
-    deferral: i.deferral,
-    donations_per_donor: i.donationsPerDonor,
-    coverage: i.coverage,
-    o_neg_fallback: i.oNegFallback,
-    crisis_first: i.crisisFirst,
-  });
-}
-
-/* ── how far to trust this ── */
+/* ───────────── how far to trust this (backend/app/backtest.py, plan.sensitivity) ───────────── */
 
 export interface BacktestResponse {
   train_end: number;
@@ -401,25 +341,15 @@ export interface SensitivityResponse {
   }[];
 }
 
-export async function getBacktest(): Promise<BacktestResponse> {
-  const res = await fetch("/api/backtest");
-  if (!res.ok) throw new Error(`/api/backtest failed: ${res.status}`);
-  return res.json();
+export function getBacktest(): Promise<BacktestResponse> {
+  return getJson("/api/backtest");
 }
 
-export async function getSensitivity(i: PlanInputs): Promise<SensitivityResponse> {
-  const q = new URLSearchParams({
-    country: i.country,
-    people: String(i.people),
-    days: String(i.days),
-    deferral: String(i.deferral),
-    donations_per_donor: String(i.donationsPerDonor),
-    coverage: String(i.coverage),
-  });
-  const res = await fetch(`/api/sensitivity?${q}`);
-  if (!res.ok) throw new Error(`/api/sensitivity failed: ${res.status}`);
-  return res.json();
+export function getSensitivity(i: PlanInputs): Promise<SensitivityResponse> {
+  return getJson(`/api/sensitivity?${planParams(i)}`);
 }
+
+/* ───────────── before you travel (backend/app/briefing.py) ───────────── */
 
 export interface BriefingItem {
   text: string;
@@ -441,38 +371,28 @@ export interface BriefingResponse {
   fallback_used: boolean;
 }
 
-async function postJson<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`${path} failed: ${res.status}`);
-  return res.json();
-}
-
-export async function getCountries(): Promise<string[]> {
-  const res = await fetch("/api/countries");
-  const data = await res.json();
-  return data.countries;
-}
-
-export async function getHotspots(): Promise<HotspotsResponse> {
-  const res = await fetch("/api/hotspots");
-  if (!res.ok) throw new Error(`/api/hotspots failed: ${res.status}`);
-  return res.json();
-}
-
 export function getBriefing(country: string): Promise<BriefingResponse> {
   return postJson("/api/briefing", { country });
 }
 
-export interface CrisisAppealRequest {
+export function getReservoir(country: string): Promise<ReservoirResponse> {
+  return getJson(`/api/reservoir?${new URLSearchParams({ country })}`);
+}
+
+export function getHotspots(): Promise<HotspotsResponse> {
+  return getJson("/api/hotspots");
+}
+
+export async function getCountries(): Promise<string[]> {
+  return (await getJson<{ countries: string[] }>("/api/countries")).countries;
+}
+
+export interface AppealRequest {
   country: string;
   people: number;
   days: number;
   verdict: string;
-  /** Blood group -> donors to recruit, most urgent first. */
+  /** Blood group ("O-", not "O−") -> donors to recruit, most urgent first. */
   donors: Record<string, number>;
   /** Blood group -> e.g. "by Mon 10 Nov". */
   deadlines: Record<string, string>;
@@ -483,7 +403,7 @@ export interface CrisisAppealRequest {
   variant?: number;
 }
 
-export interface CrisisAppealResponse {
+export interface AppealResponse {
   whatsapp: string;
   sms: string;
   email_subject: string;
@@ -492,6 +412,100 @@ export interface CrisisAppealResponse {
   source: "gemini" | "template";
 }
 
-export function draftCrisisAppeal(req: CrisisAppealRequest): Promise<CrisisAppealResponse> {
-  return postJson("/api/crisis-appeal", req);
+export function draftAppeal(req: AppealRequest): Promise<AppealResponse> {
+  return postJson("/api/appeal", req);
+}
+
+/* ───────────── donor registry (Postgres) ───────────── */
+
+export type OutreachStatus = "contacted" | "pledged" | "declined";
+export type Channel = "whatsapp" | "sms" | "email";
+
+export interface Donor {
+  id: number;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  blood_group: string;
+  country: string;
+  city: string | null;
+  last_donated: string | null;
+}
+
+export interface MatchedDonor extends Donor {
+  /** Enough time has passed since they last gave blood. */
+  can_donate: boolean;
+  /** When they can next give (ISO date), if they have given before. */
+  can_donate_from: string | null;
+  /** Latest reply in this appeal; null if not contacted yet. */
+  status: OutreachStatus | null;
+  status_at: string | null;
+}
+
+export interface DonorGroupMatch {
+  blood_group: string;
+  needed: number;
+  deadline: string;
+  /** Consenting donors of this group in the country. */
+  on_file: number;
+  /** Of those, how many can give now. */
+  eligible: number;
+  pledged: number;
+  donors: MatchedDonor[];
+}
+
+export interface DonorMatchResponse {
+  /** False when the backend has no DATABASE_URL. */
+  connected: boolean;
+  registered: number;
+  groups: DonorGroupMatch[];
+}
+
+export interface DonorIn {
+  name: string;
+  phone?: string;
+  email?: string;
+  blood_group: string;
+  country: string;
+  city?: string;
+  last_donated?: string;
+  consent: true;
+}
+
+export function matchDonors(req: {
+  country: string;
+  donors: Record<string, number>;
+  deadlines: Record<string, string>;
+}): Promise<DonorMatchResponse> {
+  return postJson("/api/donors/match", req);
+}
+
+export function registerDonor(donor: DonorIn): Promise<Donor> {
+  return postJson("/api/donors", donor);
+}
+
+/** Log a contact (one donor, or a whole group at once) or a reply. */
+export function logOutreach(donorIds: number[], status: OutreachStatus, channel?: Channel): Promise<{ logged: number }> {
+  return postJson("/api/outreach", { donor_ids: donorIds, status, channel });
+}
+
+/** This charity's contacts and replies in a country over recent days. */
+export interface Activity {
+  connected: boolean;
+  days: number;
+  contacted: number;
+  pledged: number;
+  declined: number;
+  by_day: { day: string; contacted: number; pledged: number; declined: number }[];
+}
+
+export function getActivity(country: string, days = 7): Promise<Activity> {
+  return getJson(`/api/outreach/activity?${new URLSearchParams({ country, days: String(days) })}`);
+}
+
+/* ───────────── charity account (Auth0 sign-in, stored in the database) ───────────── */
+
+/** Record the signed-in charity's name against its account. */
+export function saveCharityName(name: string): Promise<{ id: string; name: string }> {
+  return sendJson("PUT", "/api/me", { name });
 }

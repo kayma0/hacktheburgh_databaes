@@ -4,21 +4,30 @@ This app estimates blood demand from sickle cell disease (SCD) and the donors ne
 cover a chosen share of that demand. Every output is a MODELLED estimate with uncertainty,
 never a single point figure.
 
-## Data files the app reads
+## Where each number comes from
 
-Each section below says which files it uses and what is an ASSUMPTION.
+| Page / feature | Code | Data |
+|---|---|---|
+| Hotspots map | `backend/app/hotspots.py` | `data/processed/heatmap.json` (built from `data/raw.csv`, GBD 2021) |
+| Blood reservoir | `backend/app/reservoir.py` | `data/blood_supply.csv`, `data/male_raw.csv`, `data/female_raw.csv`, `data/need_calibration.csv` |
+| Trend projection | `backend/app/trends.py` | `data/donations_history.csv`, `data/population.csv` |
+| Crisis simulator | `backend/app/crisis.py` | the above, `data/blood_groups_simple.json`, `data/processed/usecases.json` |
+| Drive plan | `backend/app/plan.py`, `backtest.py` | the reservoir and crisis models; `data/raw.csv` for the back-test |
+| Urgent appeal | `backend/app/appeal.py` | the crisis result only |
+| Donor registry | `backend/app/donors.py`, `schema.sql` | Postgres (Tiger Data); demo donors from `app/seed.py` are fictional |
+| Travel checklist | `backend/app/briefing.py` | Gemini, or a fixed list |
 
-- `data/raw.csv`, `data/male_raw.csv`, `data/female_raw.csv` — GBD 2021 sickle cell
-  disorders prevalence (all ages / by age and sex) for 54 African countries, 1996-2023.
-- `data/processed/heatmap.json`, `data/processed/usecases.json` — pre-built from the
-  files above by `scripts/build_data.py` (see below).
-- `data/blood_supply.csv`, `data/donations_history.csv`, `data/population.csv`,
-  `data/need_calibration.csv`, `data/blood_groups_simple.json` — blood supply, donation
-  history, population, national need figures and ABO/RhD mix, each tagged with its source
-  or `ASSUMPTION`.
+`data/processed/heatmap.json` and `usecases.json` are pre-built from the GBD files by
+`scripts/build_data.py` (see below). Supply, history, population, need and blood-group files
+tag each value with its source or `ASSUMPTION`. Shared blood-group constants (group list,
+demand weights, units per crisis by age) are in `backend/app/blood.py`.
 
-Donations must be voluntary, unpaid, and go through a licensed national blood service.
-This is an aggregate planning tool, not a medical device, and gives no clinical advice.
+## Limits
+
+- This is an aggregate planning tool, not a medical device, and gives no clinical advice.
+- REACH trial transfusion rates come from a clinic-based cohort and may not generalise.
+- Several parameters have no cited source and are marked ASSUMPTION where they are used.
+- Donations must be voluntary, unpaid, and go through a licensed national blood service.
 
 ## Hotspots page (`backend/app/hotspots.py`, reads `data/processed/heatmap.json`)
 
@@ -111,7 +120,7 @@ MODELLED stock levels, not live blood-bank figures. One row per country in
    existing age bands; GBD 20+ uses the adult dose). Added to step 3; because step 3 is
    calibrated with SCD use taken out, the two do not double count.
 5. Demand per group = total demand × donor share × pull weight (O- 2.2, AB 0.6-0.7, see
-   `DEFAULT_DEMAND_WEIGHTS` in `reservoir.py`), renormalised.
+   `DEFAULT_DEMAND_WEIGHTS` in `blood.py`), renormalised.
 6. Days of stock per group = target × min(usable ÷ demand, 1). ASSUMPTION: a service that
    collects x% of what it uses can hold x% of its target buffer. Status: ok at the target,
    low from 60% of it (SANBS: under 3 of 5 days is critical), critical below.
@@ -189,17 +198,14 @@ The reservoir page's two sliders choose **N people in crisis** (1-50) and a **ti
    for those countries and easier for those with spare collections. By default patients
    receive only their own blood group.
 
-   Two switches change the serving rule (both off by default; "Reset to default blood
-   rates" turns them off and puts the sliders back to 25 people, 30 days):
+   One switch changes the serving rule (off by default; "Reset to defaults" turns it off
+   and puts the sliders back to 25 people, 30 days). Crisis patients are always served from
+   what is left after normal hospital use: the simulator models crisis treatment alone.
    - **Use O− when a group runs out**: a patient whose own group has nothing left gets O−
      (the universal red-cell donor) if O− has enough at that moment. Because hospitals
      already pull hardest on O− (demand weight 2.2), O− is usually the first group to run
      dry, so this mostly helps rare groups (AB−, B−) in countries with spare O−. The
      result says how often O− stepped in, or that it couldn't because it ran out first.
-   - **Crisis patients first**: crisis patients draw on stock plus *all* usable
-     collections, and normal hospital use waits. The result reports the units held back
-     from other hospital patients: crisis use beyond what was spare after normal use over
-     the window.
 4. **Result**: the share of draws where everyone was served gives the verdict: enough
    (≥ 90%), might not have enough (50-90%), not enough (< 50%). A group is "short" if, in
    draws that picked someone with that group, that person went without at least half the
@@ -219,12 +225,24 @@ The reservoir page's two sliders choose **N people in crisis** (1-50) and a **ti
    first, and for windows of 2+ weeks also shows donors a week.
 6. **Donor appeal** (`backend/app/appeal.py`, `POST /api/appeal`): the plan (groups,
    donor counts, deadlines, country, optional charity name) is turned into a WhatsApp
-   message, an SMS (≤ 300 characters) and an email. With `GEMINI_API_KEY` set, Gemini
-   writes them from those facts only (told not to invent statistics, places, dates,
-   numbers or medical claims; donation voluntary, unpaid, via the national blood
-   service); otherwise, or if Gemini fails or takes over 15 s, a fixed template is used.
-   The page sends them through WhatsApp / SMS / email share links; the charity picks the
-   recipients. Nothing is sent automatically.
+   message, an SMS (≤ 300 characters, plain sentences) and an email. With `GEMINI_API_KEY`
+   set, Gemini writes them from those facts only (told not to invent statistics, places,
+   dates, numbers or medical claims; donation voluntary, unpaid, via the national blood
+   service), with minimal thinking so a draft takes a few seconds. If a model fails or is
+   out of quota, the next is tried (a model out of quota is skipped for 15 minutes), then a
+   fixed template. Rewrite asks for a new version leading with a different angle.
+7. **Registered donors** (`backend/app/donors.py`, `POST /api/donors/match`): the
+   charity's donor registry in Postgres (Tiger Data). For each blood group in the plan it
+   lists the consenting donors in that country and marks who can give now: no donation in
+   the last 12 weeks (ASSUMPTION: the shortest common interval; many services use 16 weeks
+   for women). The charity sends the appeal either only to those who can give, each with
+   their name and last donation date in front (built in `frontend/src/simulator/messages.ts`),
+   or as written to everyone of that blood type. Every contact and reply (contacted,
+   pledged, declined) is a row in the `outreach` table, a TimescaleDB hypertable on Tiger
+   Data; a donor's status is their latest row from the last 30 days, and pledges fill each
+   group's progress bar. Where too few donors can give, the page says how many more the
+   public appeal must find. Nothing is sent automatically: each link opens WhatsApp, SMS
+   or email with the message ready, and the charity sends it.
 
 The page states that each run covers sickle cell crises only and assumes nothing else
 happens (no other emergencies, outbreaks or donation drives). The result shows a verdict, four headline
@@ -241,8 +259,9 @@ compatibility). All MODELLED, not live stock.
 
 Adds no new demand model: it composes `reservoir.compute_reservoir` (days of stock and the
 everyday gap per blood group) and `crisis.simulate_crisis` (which groups run short if N people
-with SCD go into crisis within a time window; a fixed seed so a shared link rebuilds the same
-plan). A group is **push** if its everyday stock is critical or the crisis test says it is
+with SCD go into crisis within a time window). The plan page passes the seed of the crisis run
+from the reservoir page, so the plan describes that exact simulation, and a shared link
+rebuilds it. A group is **push** if its everyday stock is critical or the crisis test says it is
 lacking, **watch** if low or at risk, otherwise **ok**.
 
 - **Regular donors** = the SCD patients' red-cell units a year (from `scd_demand_per_day`) ×
@@ -253,11 +272,13 @@ lacking, **watch** if low or at risk, otherwise **ok**.
 - Constants are multiplied through, so P10/P50/P90 scale exactly. Totals add the push/watch
   groups' percentiles, a wide range that assumes all groups move together.
 
-ASSUMPTIONS (user-adjustable): volunteers turned away at screening 20% (range 5–50%; blood-service
-reports typically give 10–35%); donations per regular donor per year 2 (range 1–4; services allow
-3–4, many African repeat donors give 1–2); coverage 10% (the share of the SCD blood need the
-drive aims to supply); share of people with SCD in regular care 30%. Verify these with the
-national blood service.
+ASSUMPTIONS (fixed defaults, listed under "What this rests on"): volunteers turned away at
+screening 20% (blood-service reports typically give 10–35%); donations per regular donor per
+year 2 (services allow 3–4, many African repeat donors give 1–2); coverage 10% (the share of
+the SCD blood need a drive aims to supply); share of people with SCD in regular care 30%.
+Verify these with the national blood service. The plan page opens on the crisis statement,
+then Reach donors (crisis simulator step 7 below), What this rests on, and How far to trust
+this.
 
 ### How far to trust this (`GET /api/backtest`, `GET /api/sensitivity`)
 
@@ -272,30 +293,23 @@ national blood service.
   total re-computed. Donations per donor per year moves the answer most in the countries
   checked.
 
-## Appeal writer (`backend/app/appeal.py`, `POST /api/appeal`)
+## Travel checklist (`backend/app/briefing.py`, `travel_advice.py`, `POST /api/briefing`)
 
-Gemini turns the plan's numbers into a donor email, social post, SMS or poster, in one of six
-languages. Gemini is a communication layer, not a source of facts:
+A trip checklist for a visiting charity team, built from the country alone. It opens with a
+"Current situation" section from the UK government's live advice (gov.uk Content API: the
+advisory status, the date gov.uk last changed the page, and the safety and regional-risk text).
+Those facts are copied, never generated, so Gemini cannot invent an advisory. Gemini
+(`GEMINI_BRIEFING_MODEL`, a fast model because the page loads it) writes the rest; each item says
+who to verify it with. If Gemini is unavailable a fixed list follows the gov.uk facts. Entry and
+visa rules stay general: FCDO advice is written for British passport holders. The country is
+validated against known values before it reaches the prompt.
 
-- The prompt is built from the plan the server recomputes, never from browser-sent numbers; the
-  user's venue/date/contact text is cleaned to one short line and marked as data.
-- The reply must mention that donation is voluntary/unpaid and may not contain a number with
-  three or more digits that was not given to it; otherwise a fixed English template is returned
-  (`fallback_reason`: `no_api_key`, `gemini_unavailable` or `failed_checks`).
-- Non-English output is machine-written and flagged for a native speaker to check.
-- Nothing is sent and no donor details are stored.
+## Charity accounts and data (`charities.py`, `auth.py`, `schema.sql`)
 
-## Travel checklist (`backend/app/briefing.py`, `POST /api/briefing`)
-
-A starter list for a visiting charity team. It is written by Gemini without live sources (or a
-fixed list when Gemini is unavailable) and says so; each item has a confidence and who to verify
-with, and official government travel advice is linked first. Country and month are validated
-against known values before they reach the prompt.
-
-## Saved plans and sign-in (`backend/app/auth.py`, `plans_store.py`)
-
-Auth0 provides the login. The server verifies the access token (RS256 signature against the
-tenant's public keys, issuer, audience, expiry) and uses its `sub` as the user id; every query is
-scoped by it in SQL. A saved plan stores only the plan's settings (an allow-listed query string),
-which the server turns back into a plan, so it cannot go stale or be forged into other numbers.
-Without Auth0 configured, saved plans stay in the browser and the protected endpoints answer 503.
+Auth0 provides the login and keeps the credentials. The server verifies each request's access
+token (RS256 signature against the tenant's public keys, issuer, audience, expiry) and uses its
+`sub` as the charity's id; the first request creates the charity's row. Donors, outreach and
+saved plans are stored under that id in Postgres on Tiger Data, and every query is scoped by it
+in SQL: a charity sees its own donors plus the shared demo donors, and only its own outreach and
+plans. A saved plan stores only the plan's settings (an allow-listed query string). Without
+Auth0 configured the app runs as one local charity.

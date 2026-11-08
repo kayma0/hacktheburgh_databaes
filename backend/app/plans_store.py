@@ -1,42 +1,17 @@
-"""Saved drive plans, one small SQLite table.
+"""Saved drive plans, in the `saved_plans` table (Postgres on Tiger Data).
 
 A saved plan is only the *settings* (the plan's query string), never results or personal
 data: the server rebuilds the plan from them, so a saved plan can't go stale or be forged
-into showing other numbers. Every query is scoped by the verified user id in SQL.
-
-SQLite lives in a file (PLANS_DB, default backend/plans.db, git-ignored). On a host with a
-disposable disk, mount a volume there or saved plans disappear on redeploy.
+into showing other numbers. Every query is scoped to the charity in SQL.
 """
 from __future__ import annotations
 
-import os
-import sqlite3
-from datetime import datetime, timezone
-from pathlib import Path
 from urllib.parse import parse_qsl, urlencode
 
-MAX_PLANS_PER_USER = 50
-ALLOWED_KEYS = {"c", "p", "d", "df", "dpd", "cov", "on", "cf"}
+from . import db
 
-
-def _path() -> Path:
-    return Path(os.environ.get("PLANS_DB") or Path(__file__).resolve().parent.parent / "plans.db")
-
-
-def _conn() -> sqlite3.Connection:
-    con = sqlite3.connect(_path())
-    con.row_factory = sqlite3.Row
-    con.execute(
-        "CREATE TABLE IF NOT EXISTS plans ("
-        " id INTEGER PRIMARY KEY AUTOINCREMENT,"
-        " user_sub TEXT NOT NULL,"
-        " name TEXT NOT NULL,"
-        " country TEXT NOT NULL,"
-        " query TEXT NOT NULL,"
-        " created_at TEXT NOT NULL)"
-    )
-    con.execute("CREATE INDEX IF NOT EXISTS plans_user ON plans(user_sub)")
-    return con
+MAX_PLANS_PER_CHARITY = 50
+ALLOWED_KEYS = {"c", "p", "d", "on", "s"}  # the plan page's settings (frontend/src/scenario.ts)
 
 
 def clean_query(query: str) -> str:
@@ -45,27 +20,36 @@ def clean_query(query: str) -> str:
     return urlencode(pairs)
 
 
-def list_plans(user_sub: str) -> list[dict]:
-    with _conn() as con:
-        rows = con.execute(
-            "SELECT id, name, country, query, created_at FROM plans WHERE user_sub = ? ORDER BY id DESC",
-            (user_sub,)).fetchall()
-    return [dict(r) for r in rows]
+def _out(row: dict) -> dict:
+    return {**row, "created_at": row["created_at"].isoformat(timespec="seconds")}
 
 
-def add_plan(user_sub: str, name: str, country: str, query: str) -> dict:
-    with _conn() as con:
-        n = con.execute("SELECT COUNT(*) FROM plans WHERE user_sub = ?", (user_sub,)).fetchone()[0]
-        if n >= MAX_PLANS_PER_USER:
+def list_plans(charity: str) -> list[dict]:
+    with db.pool().connection() as conn:
+        rows = conn.execute(
+            "SELECT id, name, country, query, created_at FROM saved_plans"
+            " WHERE charity_id = %s ORDER BY id DESC",
+            (charity,),
+        ).fetchall()
+    return [_out(r) for r in rows]
+
+
+def add_plan(charity: str, name: str, country: str, query: str) -> dict:
+    """Raises ValueError when the charity already has MAX_PLANS_PER_CHARITY plans."""
+    with db.pool().connection() as conn:
+        n = conn.execute("SELECT count(*) AS n FROM saved_plans WHERE charity_id = %s", (charity,)).fetchone()["n"]
+        if n >= MAX_PLANS_PER_CHARITY:
             raise ValueError("too_many")
-        created = datetime.now(timezone.utc).isoformat(timespec="seconds")
-        cur = con.execute(
-            "INSERT INTO plans (user_sub, name, country, query, created_at) VALUES (?, ?, ?, ?, ?)",
-            (user_sub, name, country, query, created))
-        return {"id": cur.lastrowid, "name": name, "country": country, "query": query, "created_at": created}
+        row = conn.execute(
+            """INSERT INTO saved_plans (charity_id, name, country, query)
+               VALUES (%s, %s, %s, %s)
+               RETURNING id, name, country, query, created_at""",
+            (charity, name, country, query),
+        ).fetchone()
+    return _out(row)
 
 
-def delete_plan(user_sub: str, plan_id: int) -> bool:
-    with _conn() as con:
-        cur = con.execute("DELETE FROM plans WHERE id = ? AND user_sub = ?", (plan_id, user_sub))
+def delete_plan(charity: str, plan_id: int) -> bool:
+    with db.pool().connection() as conn:
+        cur = conn.execute("DELETE FROM saved_plans WHERE id = %s AND charity_id = %s", (plan_id, charity))
         return cur.rowcount > 0

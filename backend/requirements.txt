@@ -4,6 +4,7 @@ pydantic>=2
 numpy
 python-dotenv
 google-genai
+psycopg[binary,pool]>=3.2
 pytest
 httpx
 PyJWT[crypto]

@@ -114,11 +114,10 @@ def simulate_crisis(
     days: int,
     seed: int,
     o_neg_fallback: bool = False,
-    crisis_first: bool = False,
 ) -> dict:
-    """o_neg_fallback: a patient whose own group has run out gets O- (the universal red-cell
-    donor) if there is O- left. crisis_first: crisis patients are served before normal
-    hospital use, so the blood they take is blood other patients go without."""
+    """Crisis patients are served from the blood left after normal hospital use.
+    o_neg_fallback: a patient whose own group has run out gets O- (the universal red-cell
+    donor) if there is O- left."""
     supply = load_supply().get(country)
     if supply is None:
         raise KeyError(country)
@@ -177,9 +176,8 @@ def simulate_crisis(
     grp = g_idx[chosen]
     dose = rng.triangular(lo[chosen], mode[chosen], hi[chosen]) * sexf[chosen] / ml_per_unit
 
-    # What flows in for crisis patients each day: spare collections after normal use, or
-    # (crisis patients first) all usable collections, with normal use waiting.
-    inflow_g = usable_g if crisis_first else net_g
+    # What flows in for crisis patients each day: what is spare after normal use.
+    inflow_g = net_g
     o_neg = BLOOD_TYPES.index("O-")
     rows = np.arange(n)
     used = np.zeros((n, len(BLOOD_TYPES)))
@@ -201,11 +199,6 @@ def simulate_crisis(
             o_neg_helped += sub
             ok = ok | sub
         served[:, k] = ok
-
-    # Crisis patients first: blood they took beyond what was spare after normal use over
-    # the window is blood other hospital patients went without.
-    spare_g = np.maximum(stock_g + net_g * days, 0.0)
-    displaced = np.maximum(used - spare_g, 0.0).sum(axis=1) if crisis_first else np.zeros(n)
 
     unserved = (~served).sum(axis=1)
     all_served = unserved == 0
@@ -301,10 +294,8 @@ def simulate_crisis(
         "routine_use_per_day": _pct(routine_day),
         "target_days": target,
         "o_neg_fallback": bool(o_neg_fallback),
-        "crisis_first": bool(crisis_first),
         "o_neg_given_units": _pct(o_neg_given),
         "o_neg_patients_helped": float(o_neg_helped.mean()),
-        "routine_displaced_units": _pct(displaced),
         "first_short_day": float(np.median(t_first[any_short])) if any_short.any() else None,
         "share_runs_with_shortage": float(any_short.mean()),
         "donors_to_cover_total": int(sum(g["donors_to_cover"] for g in by_group)),

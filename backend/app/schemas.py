@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from datetime import date, datetime
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
-CrisisCount = Annotated[int, Field(ge=0, le=5_000_000)]
+BloodGroup = Literal["O+", "A+", "B+", "AB+", "O-", "A-", "B-", "AB-"]
+Channel = Literal["whatsapp", "sms", "email"]
 
 
 class Percentiles(BaseModel):
@@ -178,12 +180,9 @@ class CrisisResponse(BaseModel):
     routine_use_per_day: Percentiles
     target_days: float
     o_neg_fallback: bool = False
-    crisis_first: bool = False
     o_neg_given_units: Percentiles = Field(
         description="O- units given to patients of other groups (O- fallback on)")
     o_neg_patients_helped: float = Field(description="Mean number of such patients per simulation")
-    routine_displaced_units: Percentiles = Field(
-        description="Units crisis patients took from other hospital patients (crisis-first on)")
     first_short_day: float | None = Field(
         description="Median day the first patient goes without blood, in runs where anyone does")
     share_runs_with_shortage: float
@@ -191,21 +190,21 @@ class CrisisResponse(BaseModel):
     cover_share: float
 
 
-class CrisisAppealRequest(BaseModel):
+class AppealRequest(BaseModel):
     country: str
     people: int = Field(ge=1, le=50)
     days: int = Field(ge=1, le=365)
     verdict: str
-    donors: dict[str, int] = Field(description="Blood group -> donors to recruit")
-    deadlines: dict[str, str] = Field(
-        default_factory=dict, description="Blood group -> 'by 17 Nov' style deadline")
+    donors: dict[BloodGroup, int] = Field(description="Blood group -> donors to recruit")
+    deadlines: dict[BloodGroup, str] = Field(
+        default_factory=dict, description="Blood group -> 'by Sun 15 Nov' style deadline")
     organisation: str | None = Field(None, max_length=80)
     patients_by_age: dict[str, int] = Field(
         default_factory=dict, description="under_5 | children | teens | adults -> count")
     variant: int = Field(0, ge=0, le=50, description="0 = first draft; 1, 2, ... = rewrites")
 
 
-class CrisisAppealResponse(BaseModel):
+class AppealResponse(BaseModel):
     whatsapp: str
     sms: str = Field(description="Short version, about 300 characters")
     email_subject: str
@@ -243,7 +242,6 @@ class PlanParams(BaseModel):
     donations_per_donor: float
     coverage: float
     o_neg_fallback: bool
-    crisis_first: bool
 
 
 class PlanAssumption(BaseModel):
@@ -269,50 +267,7 @@ class PlanResponse(BaseModel):
     groups: list[PlanGroup]
     totals: PlanTotals
     assumptions: list[PlanAssumption]
-    ask: str
     disclaimer: str
-
-
-class AppealDetails(BaseModel):
-    organisation: str = Field("", max_length=80)
-    date: str = Field("", max_length=80)
-    venue: str = Field("", max_length=120)
-    contact: str = Field("", max_length=120)
-
-
-class AppealRequest(BaseModel):
-    country: str
-    channel: Literal["social", "email", "sms", "poster"] = "social"
-    tone: Literal["warm", "urgent", "formal"] = "warm"
-    language: Literal["English", "French", "Portuguese", "Swahili", "Arabic", "Hausa"] = "English"
-    details: AppealDetails = AppealDetails()
-    # The plan the appeal is written from. The server recomputes it; numbers are never taken
-    # from the browser.
-    people: int = Field(25, ge=1, le=50)
-    days: int = Field(30, ge=1, le=365)
-    deferral: float = Field(0.20, ge=0.05, le=0.5)
-    donations_per_donor: float = Field(2.0, ge=1, le=4)
-    coverage: float = Field(0.10, ge=0, le=1)
-    o_neg_fallback: bool = False
-    crisis_first: bool = False
-
-
-class AppealFacts(BaseModel):
-    groups: list[str]
-    regular: str | None = None
-    oneoff: str | None = None
-
-
-class AppealResponse(BaseModel):
-    text: str
-    channel: str
-    tone: str
-    language: str
-    source: Literal["gemini", "template"]
-    fallback_reason: str | None = Field(
-        None, description="no_api_key | gemini_unavailable | failed_checks when source is template")
-    note: str | None = None
-    facts_used: AppealFacts
 
 
 class BacktestHorizon(BaseModel):
@@ -388,3 +343,118 @@ class BriefingResponse(BaseModel):
     updated: str | None = Field(None, description="Date gov.uk last updated its advice, YYYY-MM-DD")
     sections: list[BriefingSection]
     fallback_used: bool = False
+
+
+# ───────────── donor registry ─────────────
+
+
+class DonorIn(BaseModel):
+    """A donor signing up. They must agree to be contacted, and give a phone or an email."""
+    name: str = Field(min_length=1, max_length=80)
+    phone: str | None = Field(None, max_length=24, description="International format, e.g. +233 20 123 4567")
+    email: str | None = Field(None, max_length=120)
+    blood_group: BloodGroup
+    country: str = Field(min_length=1, max_length=80)
+    last_donated: date | None = None
+    consent: Literal[True] = Field(description="Agrees to be contacted when their group is needed")
+
+    @field_validator("name", "phone", "email", mode="before")
+    @classmethod
+    def blank_is_none(cls, v):
+        return (v.strip() or None) if isinstance(v, str) else v
+
+    @field_validator("phone")
+    @classmethod
+    def phone_digits(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        digits = "".join(ch for ch in v if ch.isdigit())
+        if not 7 <= len(digits) <= 15:
+            raise ValueError("phone needs 7 to 15 digits, with the country code")
+        return "+" + digits
+
+    @field_validator("email")
+    @classmethod
+    def email_shape(cls, v: str | None) -> str | None:
+        if v is not None and ("@" not in v or "." not in v.rsplit("@", 1)[-1]):
+            raise ValueError("not an email address")
+        return v
+
+    @model_validator(mode="after")
+    def reachable(self):
+        if not (self.phone or self.email):
+            raise ValueError("give a phone number or an email address")
+        return self
+
+
+class Donor(BaseModel):
+    id: int
+    name: str
+    phone: str | None
+    email: str | None
+    blood_group: BloodGroup
+    country: str
+    last_donated: date | None
+
+
+class MatchedDonor(Donor):
+    can_donate: bool = Field(description="Enough time has passed since they last gave blood")
+    can_donate_from: date | None = Field(description="When they can next give, if they have given")
+    status: Literal["contacted", "pledged", "declined"] | None = Field(
+        description="Latest reply in this appeal; null if not contacted yet")
+    status_at: datetime | None
+
+
+class DonorMatchRequest(BaseModel):
+    country: str
+    donors: dict[BloodGroup, int] = Field(description="Blood group -> donors to recruit")
+    deadlines: dict[BloodGroup, str] = Field(default_factory=dict)
+
+
+class DonorGroupMatch(BaseModel):
+    blood_group: BloodGroup
+    needed: int
+    deadline: str
+    on_file: int = Field(description="Consenting donors of this group in the country")
+    eligible: int = Field(description="Of those, how many can give now")
+    pledged: int
+    donors: list[MatchedDonor]
+
+
+class DonorMatchResponse(BaseModel):
+    connected: bool
+    registered: int = Field(0, description="Consenting donors on file in this country")
+    groups: list[DonorGroupMatch] = []
+
+
+class CharityIn(BaseModel):
+    """The signed-in charity's display name (from its Auth0 profile)."""
+    name: str = Field(min_length=1, max_length=120)
+
+
+class Charity(BaseModel):
+    id: str = Field(description="Auth0 user id, or 'local' when sign-in is not set up")
+    name: str | None
+
+
+class ActivityDay(BaseModel):
+    day: date
+    contacted: int
+    pledged: int
+    declined: int
+
+
+class ActivityResponse(BaseModel):
+    """This charity's outreach in one country over recent days (from the outreach hypertable)."""
+    connected: bool
+    days: int
+    contacted: int = 0
+    pledged: int = 0
+    declined: int = 0
+    by_day: list[ActivityDay] = []
+
+
+class OutreachIn(BaseModel):
+    donor_ids: list[int] = Field(min_length=1, max_length=500)
+    status: Literal["contacted", "pledged", "declined"]
+    channel: Channel | None = None
