@@ -2301,3 +2301,267 @@ input[type="range"]:focus-visible {
     margin-top: -73px;
   }
 }
+
+/* ── crisis simulator ─────────────────────────────── */
+.sim {
+  margin-top: 8px;
+}
+.sim-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px 28px;
+  align-items: start;
+  margin-top: 6px;
+}
+
+.sim-controls .dial {
+  margin: 0;
+}
+.sim-run {
+  width: auto;
+  margin: 0 0 6px;
+  white-space: nowrap;
+}
+.sim-run:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+.sim-result {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+  transition: opacity 0.2s;
+}
+.sim-result.is-stale {
+  opacity: 0.55;
+}
+.sim-stale {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--firebrick);
+  margin: 0 0 8px;
+}
+.sim-verdict {
+  font-family: var(--display);
+  font-size: clamp(19px, 2.1vw, 24px);
+  line-height: 1.45;
+  margin: 0 0 8px;
+  padding: 14px 18px;
+  border-left: 5px solid var(--firebrick);
+  background: var(--paper-2);
+  border-radius: 0 4px 4px 0;
+}
+.verdict-enough .sim-verdict {
+  border-left-color: #5a7d4f;
+  background: #eef3ea;
+}
+.verdict-not_enough .sim-verdict-word {
+  color: var(--oxblood);
+}
+.sim-chip {
+  margin: 0 3px;
+  vertical-align: 2px;
+  font-size: 12px;
+}
+.sim-odds {
+  font-size: 15px;
+  color: var(--ink-soft);
+  margin: 0 0 18px;
+}
+.sim-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 28px;
+  align-items: start;
+}
+.sim-h {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+  margin: 0 0 6px;
+}
+.sim-table td:last-child {
+  font-family: var(--mono);
+  white-space: normal;
+}
+.sim-table tr.is-short th {
+  color: var(--oxblood);
+}
+.sim-basis {
+  margin-top: 16px;
+}
+@media (max-width: 960px) {
+  .sim-controls {
+    grid-template-columns: 1fr;
+  }
+  .sim-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── simulator: options, actions, donut ─────────────────────────────── */
+.sim-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 28px;
+  margin-top: 14px;
+}
+.toggle {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.toggle:hover {
+  background: var(--paper-2);
+}
+.toggle.is-on {
+  border-color: var(--firebrick);
+  background: var(--paper-2);
+}
+.toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.toggle-track {
+  width: 38px;
+  height: 22px;
+  border-radius: 999px;
+  background: #d9cfc9;
+  position: relative;
+  margin-top: 1px;
+  transition: background 0.15s;
+}
+.toggle-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(42, 8, 5, 0.3);
+  transition: transform 0.15s;
+}
+.toggle.is-on .toggle-track {
+  background: var(--firebrick);
+}
+.toggle.is-on .toggle-knob {
+  transform: translateX(16px);
+}
+.toggle input:focus-visible + .toggle-track {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.toggle-text b {
+  display: block;
+  font-size: 14.5px;
+}
+.toggle-text small {
+  display: block;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin-top: 2px;
+}
+.sim-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-top: 18px;
+}
+.sim-actions .btn {
+  padding: 12px 22px;
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--firebrick);
+  box-shadow: inset 0 0 0 1.5px var(--firebrick);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--paper-2);
+}
+.btn-ghost:disabled,
+.sim-run:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.donut {
+  margin: 0;
+  display: grid;
+  grid-template-columns: minmax(150px, 190px) 1fr;
+  gap: 18px;
+  align-items: center;
+}
+.donut svg {
+  width: 100%;
+  height: auto;
+}
+.donut path {
+  stroke: var(--card);
+  stroke-width: 0;
+  transition: opacity 0.15s;
+  cursor: default;
+}
+.donut path.is-dim {
+  opacity: 0.35;
+}
+.donut-big {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 30px;
+  fill: var(--ink);
+}
+.donut-small {
+  font-family: var(--sans);
+  font-size: 9.5px;
+  fill: var(--ink-soft);
+}
+.donut-key {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+}
+.donut-key span {
+  cursor: default;
+}
+.donut-key i {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  margin-right: 8px;
+  vertical-align: -1px;
+}
+.donut-key small {
+  color: var(--ink-soft);
+}
+.sim-scope {
+  margin: 18px 0 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+  font-style: italic;
+}
+@media (max-width: 960px) {
+  .sim-options {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 420px) {
+  .donut {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+  .donut svg {
+    max-width: 190px;
+  }
+}

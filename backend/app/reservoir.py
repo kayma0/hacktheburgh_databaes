@@ -17,6 +17,13 @@ from pathlib import Path
 import numpy as np
 
 from .model import BLOOD_TYPES, DEFAULT_DEMAND_WEIGHTS, DEFAULT_UNITS_BY_AGE
+from .trends import (
+    PROJECTION_YEAR,
+    donation_trend,
+    population_in,
+    project_age_sex,
+    sample_donations_per_1000,
+)
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 SUPPLY_CSV = DATA_DIR / "blood_supply.csv"
@@ -211,18 +218,30 @@ def compute_reservoir(country: str, share_in_care: float = DEFAULT_SHARE_IN_CARE
     base = np.array([supply.shares[t] for t in BLOOD_TYPES])
     mix = rng.dirichlet(np.maximum(base, 1e-4) * alpha_k, n)  # (n, 8)
 
-    # Supply: reported donations, minus discards.
-    donated_day = supply.whole_blood_donations / 365.0
+    # Supply: donations per 1000 people fitted to the WHO + national history and projected
+    # to this year (trends.py), times this year's population, minus discards.
+    year = PROJECTION_YEAR
+    pop_now = population_in(country, year)
+    trend = donation_trend(country, year)
+    rate_now = sample_donations_per_1000(trend, rng, n)
+    donated_day = rate_now * pop_now / 1000 / 365.0
     discard = _tri(rng, *DISCARD, n)
     usable_day = donated_day * (1 - discard)
 
     # General (non-SCD) need, calibrated to published national requirements.
     cal = calibrate_need()["need_per_1000"]
-    need_day = supply.population * _tri(rng, cal["min"], cal["mode"], cal["max"], n) / 1000 / 365.0
+    need_day = pop_now * _tri(rng, cal["min"], cal["mode"], cal["max"], n) / 1000 / 365.0
 
-    # SCD load for the same year as the donation data, by age band.
+    # SCD load from the latest GBD year, scaled to this year's projected number of people.
+    proj = project_age_sex(country, year)
     scd_units_day, scd_year, patients, by_band = _scd_units_day(
-        country, supply.donations_year, share_in_care, rng, n)
+        country, proj["data_year"], share_in_care, rng, n)
+    growth = proj["people_now"] / max(proj["people_data_year"], 1e-9)
+    scd_units_day = scd_units_day * growth
+    patients = proj["people_now"]
+    for b in by_band.values():
+        b["patients"] *= growth
+        b["units_per_day"] = {k: v * growth for k, v in b["units_per_day"].items()}
 
     demand_day = need_day + scd_units_day
 
@@ -258,8 +277,8 @@ def compute_reservoir(country: str, share_in_care: float = DEFAULT_SHARE_IN_CARE
 
     return {
         "country": country,
-        "data_year": supply.donations_year,
-        "scd_data_year": scd_year,
+        "data_year": year,
+        "scd_data_year": year,
         "target_days": target,
         "target_source": supply.reserve_source,
         "target_is_assumption": supply.reserve_source.startswith("ASSUMPTION"),
@@ -268,14 +287,16 @@ def compute_reservoir(country: str, share_in_care: float = DEFAULT_SHARE_IN_CARE
         "donations_source": supply.donations_source,
         "donations_is_assumption": supply.donations_source.startswith("ASSUMPTION"),
         "donations_note": supply.donations_note,
-        "population": supply.population,
-        "donations_per_year": supply.whole_blood_donations,
-        "donations_per_1000": supply.donations_per_1000,
+        "population": pop_now,
+        "donations_per_year": float(np.median(donated_day)) * 365,
+        "donations_per_1000": float(np.median(rate_now)),
+        "donation_history_years": trend["years"],
+        "donations_reported_year": trend["years"][-1] if trend["years"] else None,
         "share_in_care": share_in_care,
         "need_per_1000": cal,
         "scd_patients": patients,
         "scd_by_age": by_band,
-        "donated_per_day": float(donated_day),
+        "donated_per_day": float(np.median(donated_day)),
         "usable_per_day": _pct(usable_day),
         "demand_per_day": _pct(demand_day),
         "scd_demand_per_day": _pct(scd_units_day),

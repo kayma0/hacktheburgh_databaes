@@ -10,8 +10,8 @@ import type {
 import {
   askAssistant,
   getBriefing,
-  getCalibration,
   getCountries,
+  getCrisis,
   getHealth,
   getHotspots,
   getReservoir,
@@ -20,7 +20,7 @@ import {
 import type {
   BloodTypeStock,
   BriefingResponse,
-  CalibrationResponse,
+  CrisisResponse,
   ChatMessage,
   HotspotItem,
   HotspotsResponse,
@@ -49,6 +49,7 @@ const MONTHS = [
 
 // The app is the hotspots map plus the blood reservoir page. StockPage and BriefingPage
 // below are kept but not routed (the stock model's data/raw/ files are missing).
+// Pages are reached through the buttons on each page (map -> reservoir -> back), not a nav bar.
 type Page = "hotspots" | "reservoir";
 const ALL_PAGES: Page[] = ["hotspots", "reservoir"];
 
@@ -1273,23 +1274,52 @@ function HotspotsPage({
 
 /* ───────────────────────── reservoir page ───────────────────────── */
 
-const SCD_BANDS: { id: string; label: string }[] = [
-  { id: "under_5", label: "Under 5" },
-  { id: "age_5_14", label: "5–14" },
-  { id: "age_15_24", label: "15–19" },
-  { id: "age_25_plus", label: "20+" },
-];
-
 const fmtRate = (v: number) =>
   v >= 100 ? fmt(v) : v >= 10 ? v.toFixed(0) : v >= 1 ? v.toFixed(1) : v.toFixed(2);
 
-function SourceTag({ assumed }: { assumed: boolean }) {
+function SourceTag({ assumed, title }: { assumed: boolean; title?: string }) {
   return (
-    <span className={`src-tag ${assumed ? "is-assumed" : ""}`}>
+    <span className={`src-tag ${assumed ? "is-assumed" : ""}`} title={title}>
       {assumed ? "Assumption" : "Sourced"}
     </span>
   );
 }
+
+const ALL_GROUPS = ["O+", "A+", "B+", "AB+", "O-", "A-", "B-", "AB-"];
+const groupLabel = (g: string) => g.replace("-", "−");
+
+/* Time-frame slider: positions 0–100 map onto 1–365 days on a log scale, so a day, a
+   week and a month are as easy to pick as a whole year. */
+const MAX_WINDOW = 365;
+const posToDays = (p: number) =>
+  Math.max(1, Math.min(MAX_WINDOW, Math.round(Math.exp((p / 100) * Math.log(MAX_WINDOW)))));
+const daysToPos = (d: number) => (Math.log(Math.max(d, 1)) / Math.log(MAX_WINDOW)) * 100;
+const fmtWindow = (d: number) => {
+  const base = `${d} day${d === 1 ? "" : "s"}`;
+  if (d >= 360) return `${base} (about a year)`;
+  if (d >= 56) return `${base} (about ${Math.round(d / 30.4)} months)`;
+  if (d >= 14) return `${base} (about ${Math.round(d / 7)} weeks)`;
+  return base;
+};
+
+/** "a, b and c" */
+const listJoin = (xs: string[]) =>
+  xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`;
+
+const AGE_ORDER = ["under_5", "children", "teens", "adults"] as const;
+const AGE_SINGULAR: Record<string, string> = {
+  under_5: "under-5",
+  children: "child aged 5–9",
+  teens: "teen aged 10–19",
+  adults: "adult aged 20+",
+};
+// One red, light to dark by age (validated as an ordinal ramp against the card surface).
+const AGE_COLOR: Record<string, string> = {
+  under_5: "#EE9273",
+  children: "#D9503A",
+  teens: "#A81E22",
+  adults: "#6E0A12",
+};
 
 function ReservoirPage({
   country,
@@ -1298,7 +1328,6 @@ function ReservoirPage({
   country: string;
   onBack: () => void;
 }) {
-  const [shareInCare, setShareInCare] = useState(0.3);
   const [r, setR] = useState<ReservoirResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1307,33 +1336,21 @@ function ReservoirPage({
     if (!country) return;
     let live = true;
     setLoading(true);
-    const t = window.setTimeout(() => {
-      getReservoir(country, shareInCare)
-        .then((d) => {
-          if (!live) return;
-          setR(d);
-          setError(null);
-        })
-        .catch((e) => live && setError(String(e)))
-        .finally(() => live && setLoading(false));
-    }, 200);
+    getReservoir(country, 0.3)
+      .then((d) => {
+        if (!live) return;
+        setR(d);
+        setError(null);
+      })
+      .catch((e) => live && setError(String(e)))
+      .finally(() => live && setLoading(false));
     return () => {
       live = false;
-      window.clearTimeout(t);
     };
-  }, [country, shareInCare]);
+  }, [country]);
 
   const target = r?.target_days ?? 6;
   const ghostDays: Percentiles = { p10: 0, p50: 0, p90: 0 };
-  const types = r?.types ?? [];
-  const maxRate = Math.max(
-    1,
-    ...types.map((t) => Math.max(t.donated_per_day.p50, t.demand_per_day.p50)),
-  );
-  const short = types
-    .filter((t) => t.extra_donations_per_day.p50 >= 0.5)
-    .sort((a, b) => b.extra_donations_per_day.p50 - a.extra_donations_per_day.p50);
-  const totalExtra = types.reduce((a, t) => a + t.extra_donations_per_day.p50, 0);
 
   return (
     <>
@@ -1341,7 +1358,7 @@ function ReservoirPage({
         <p className="eyebrow">
           Modelled blood reservoir <span className="dot-sep">·</span>
           <span className={`live ${loading ? "is-busy" : ""}`}>
-            {loading ? "re-running 10,000 draws" : "not live stock"}
+            {loading ? "running 10,000 draws" : "not live stock"}
           </span>
         </p>
         <div className="hero-place">
@@ -1355,7 +1372,11 @@ function ReservoirPage({
           {r && (
             <>
               {" "}
-              Collections from <b>{r.data_year}</b>, the latest WHO year.
+              Collections projected to <b>{r.data_year}</b> from{" "}
+              {r.donations_reported_year
+                ? `reported figures up to ${r.donations_reported_year}`
+                : "the WHO Africa average"}
+              .
             </>
           )}
         </p>
@@ -1384,7 +1405,7 @@ function ReservoirPage({
                 }
               />
             ))
-          : ["O+", "A+", "B+", "AB+", "O-", "A-", "B-", "AB-"].map((g) => (
+          : ALL_GROUPS.map((g) => (
               <BloodBag
                 key={g}
                 type={g}
@@ -1400,262 +1421,366 @@ function ReservoirPage({
       <p className="target-note">
         {country || "This country"} aims to retain <b>{fmtDays(target)} days</b> of
         stock at any time. A full bag means that target is met.{" "}
-        {r && <SourceTag assumed={r.target_is_assumption} />}
-        {r && <span className="target-sub">{r.target_source}</span>}
+        {r && <SourceTag assumed={r.target_is_assumption} title={r.target_source} />}
       </p>
 
-      <div className="split">
-        <section className="panel">
-          <header className="panel-head">
-            <span className="panel-key">A</span>
-            <h2>Donation rate by blood group</h2>
-            <p>
-              Whole-blood donations a day, split by the donor blood-group mix,
-              against the units each group is used at.
-            </p>
-          </header>
-          {r && (
-            <>
-              <p className="rate-total">
-                <b>{fmt(r.donated_per_day)}</b> donations a day nationally (
-                {r.donations_per_1000.toFixed(1)} per 1,000 people a year; WHO
-                minimum is 10){" "}
-                <SourceTag assumed={r.donations_is_assumption} />
-              </p>
-              <table className="rates">
-                <thead>
-                  <tr>
-                    <th>Group</th>
-                    <th>Donors</th>
-                    <th className="rates-bar-h">
-                      <span className="k-don">Donated</span> vs{" "}
-                      <span className="k-use">used</span> a day
-                    </th>
-                    <th title="Extra donations a day needed to cover use, after discards">
-                      Extra donors a day
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {types.map((t) => (
-                    <tr key={t.blood_type}>
-                      <th scope="row">{t.blood_type.replace("-", "−")}</th>
-                      <td>{(t.donor_share * 100).toFixed(1)}%</td>
-                      <td className="rates-bar">
-                        <span
-                          className="bar bar-don"
-                          style={{ width: `${(t.donated_per_day.p50 / maxRate) * 100}%` }}
-                        />
-                        <span
-                          className="bar bar-use"
-                          style={{ width: `${(t.demand_per_day.p50 / maxRate) * 100}%` }}
-                        />
-                        <small>
-                          {fmtRate(t.donated_per_day.p50)} vs{" "}
-                          {fmtRate(t.demand_per_day.p50)}
-                        </small>
-                      </td>
-                      <td>
-                        {t.extra_donations_per_day.p50 < 0.5 ? (
-                          <span className="chip chip-ok">covered</span>
-                        ) : (
-                          <>
-                            <b>{fmtRate(t.extra_donations_per_day.p50)}</b>
-                            <small className="rates-range">
-                              {fmtRate(t.extra_donations_per_day.p10)}–
-                              {fmtRate(t.extra_donations_per_day.p90)}
-                            </small>
-                          </>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <p className="fine">
-                Blood-group mix: {r.blood_type_source}.{" "}
-                <SourceTag assumed={r.blood_type_is_assumption} />
-                {r.donations_note && <> {r.donations_note}.</>}
-              </p>
-            </>
-          )}
-        </section>
+      <CrisisSimulator country={country} />
 
-        <section className="panel">
-          <header className="panel-head">
-            <span className="panel-key">B</span>
-            <h2>Sickle cell pull on the reservoir</h2>
-            <p>
-              Units a day used by people with SCD who are in care, by age.
-              Children are transfused by body weight.
-            </p>
-          </header>
-          {r && (
-            <>
-              <dl className="res-rows">
-                <div>
-                  <dt>People living with SCD, {r.scd_data_year}</dt>
-                  <dd>{fmtBig(r.scd_patients)}</dd>
-                </div>
-                <div>
-                  <dt>SCD units a day</dt>
-                  <dd>
-                    {fmtRate(r.scd_demand_per_day.p50)}
-                    <small>
-                      {" "}
-                      ({fmtRate(r.scd_demand_per_day.p10)}–
-                      {fmtRate(r.scd_demand_per_day.p90)})
-                    </small>
-                  </dd>
-                </div>
-                <div>
-                  <dt>Share of all blood used</dt>
-                  <dd>
-                    {pct(r.scd_share_of_demand.p50)}
-                    <small>
-                      {" "}
-                      ({pct(r.scd_share_of_demand.p10)}–
-                      {pct(r.scd_share_of_demand.p90)})
-                    </small>
-                  </dd>
-                </div>
-              </dl>
-              <ul className="scd-ages">
-                {SCD_BANDS.map((b) => {
-                  const a = r.scd_by_age[b.id];
-                  if (!a) return null;
-                  const w = r.scd_demand_per_day.p50
-                    ? (a.units_per_day.p50 / r.scd_demand_per_day.p50) * 100
-                    : 0;
-                  return (
-                    <li key={b.id}>
-                      <span>{b.label}</span>
-                      <span className="scd-bar">
-                        <i style={{ width: `${w}%` }} />
-                      </span>
-                      <b>{fmtRate(a.units_per_day.p50)}</b>
-                    </li>
-                  );
-                })}
-              </ul>
-            </>
-          )}
-          <Dial
-            label="People with SCD in care"
-            value={shareInCare}
-            min={0}
-            max={1}
-            step={0.05}
-            format={pct}
-            hint="Assumption: only diagnosed patients in care draw on the blood bank"
-            onChange={setShareInCare}
-          />
-          {r && (
-            <p className="fine">
-              {short.length === 0
-                ? "Every group covers its use under this scenario."
-                : `To reach the target, ${country} needs about ${fmt(totalExtra)} more donations a day, most of all ${short
-                    .slice(0, 3)
-                    .map((t) => t.blood_type.replace("-", "−"))
-                    .join(", ")}.`}
-            </p>
-          )}
-        </section>
+      <div className="hero-actions">
+        <button className="btn" onClick={onBack}>
+          ← Back to hotspots
+        </button>
       </div>
-
-      <section className="assume">
-        <h3>What's sourced and what's assumed</h3>
-        <p>
-          These are <b>modelled</b> stock levels, not live blood-bank figures.
-          Days of stock = the national target × (usable donations ÷ use),
-          capped at the target. <b>Sourced:</b> whole-blood donations (WHO Global
-          status report 2021, Annex 3), population (World Bank), blood-group mix
-          where a national study exists, South Africa's 5-day target (SANBS),
-          the share of units discarded (WHO Africa 2022 survey) and people
-          living with SCD by age (GBD). <b>Calibrated:</b> everyday (non-sickle
-          cell) blood need
-          {r && (
-            <>
-              {" "}
-              of {r.need_per_1000.min.toFixed(1)}–{r.need_per_1000.max.toFixed(1)}{" "}
-              donations per 1,000 people a year
-            </>
-          )}
-          , fitted to published national requirements (below).{" "}
-          <b>Assumed:</b> the 6-day target where no country policy is
-          published, the extra pull on O−, and the share of SCD patients in
-          care. See <code>docs/METHOD.md</code>.
-        </p>
-        <CalibrationCheck />
-        <div className="hero-actions">
-          <button className="btn" onClick={onBack}>
-            ← Back to hotspots
-          </button>
-        </div>
-      </section>
     </>
   );
 }
 
-/** Published national requirements the need is calibrated to, against the model. */
-function CalibrationCheck() {
-  const [cal, setCal] = useState<CalibrationResponse | null>(null);
-  useEffect(() => {
-    getCalibration()
-      .then(setCal)
-      .catch(() => setCal(null));
-  }, []);
-  if (!cal) return null;
+/* ───────────── crisis simulator: two sliders, two options, run + reset ───────────── */
+
+const SIM_DEFAULTS = { people: 25, days: 30, oNegFallback: false, crisisFirst: false };
+
+function Toggle({
+  label,
+  hint,
+  checked,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
   return (
-    <div className="calib">
-      <p className="calib-head">
-        Calibration check: published yearly requirement vs this model
+    <label className={`toggle ${checked ? "is-on" : ""}`}>
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span className="toggle-track" aria-hidden>
+        <span className="toggle-knob" />
+      </span>
+      <span className="toggle-text">
+        <b>{label}</b>
+        <small>{hint}</small>
+      </span>
+    </label>
+  );
+}
+
+function CrisisSimulator({ country }: { country: string }) {
+  const [people, setPeople] = useState(SIM_DEFAULTS.people);
+  const [windowPos, setWindowPos] = useState(daysToPos(SIM_DEFAULTS.days));
+  const [oNegFallback, setONegFallback] = useState(SIM_DEFAULTS.oNegFallback);
+  const [crisisFirst, setCrisisFirst] = useState(SIM_DEFAULTS.crisisFirst);
+  const days = posToDays(windowPos);
+  const [res, setRes] = useState<CrisisResponse | null>(null);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Results describe the inputs they were run with; flag when anything has changed.
+  const stale =
+    !!res &&
+    (res.people !== people ||
+      res.days !== days ||
+      res.country !== country ||
+      res.o_neg_fallback !== oNegFallback ||
+      res.crisis_first !== crisisFirst);
+  const isDefault =
+    people === SIM_DEFAULTS.people &&
+    days === SIM_DEFAULTS.days &&
+    oNegFallback === SIM_DEFAULTS.oNegFallback &&
+    crisisFirst === SIM_DEFAULTS.crisisFirst &&
+    !res;
+
+  useEffect(() => {
+    setRes(null);
+    setError(null);
+  }, [country]);
+
+  const run = () => {
+    if (!country) return;
+    setRunning(true);
+    setError(null);
+    getCrisis(country, people, days, { oNegFallback, crisisFirst })
+      .then(setRes)
+      .catch((e) => setError(String(e)))
+      .finally(() => setRunning(false));
+  };
+
+  const reset = () => {
+    setPeople(SIM_DEFAULTS.people);
+    setWindowPos(daysToPos(SIM_DEFAULTS.days));
+    setONegFallback(SIM_DEFAULTS.oNegFallback);
+    setCrisisFirst(SIM_DEFAULTS.crisisFirst);
+    setRes(null);
+    setError(null);
+  };
+
+  return (
+    <section className="panel sim">
+      <header className="panel-head">
+        <span className="panel-key">⚡</span>
+        <h2>Crisis simulator</h2>
+        <p>
+          Pick how many people go into a sickle cell crisis and over how long,
+          then run 5,000 simulations to see whether{" "}
+          {country || "this country"}'s blood supply could cover them.
+        </p>
+      </header>
+
+      <div className="sim-controls">
+        <Dial
+          label="People in crisis"
+          value={people}
+          min={1}
+          max={50}
+          step={1}
+          format={(v) => `${v} ${v === 1 ? "person" : "people"}`}
+          onChange={setPeople}
+        />
+        <Dial
+          label="Time frame"
+          value={windowPos}
+          min={0}
+          max={100}
+          step={0.5}
+          format={(p) => fmtWindow(posToDays(p))}
+          onChange={setWindowPos}
+        />
+      </div>
+
+      <div className="sim-options">
+        <Toggle
+          label="Use O− when a group runs out"
+          hint="O− is the universal red-cell donor: anyone can receive it"
+          checked={oNegFallback}
+          onChange={setONegFallback}
+        />
+        <Toggle
+          label="Crisis patients first"
+          hint="Hospitals hold back blood from other patients for the crisis"
+          checked={crisisFirst}
+          onChange={setCrisisFirst}
+        />
+      </div>
+
+      <div className="sim-actions">
+        <button className="btn sim-run" onClick={run} disabled={running || !country}>
+          {running ? "Simulating…" : res ? "Run again" : "Run simulation"}
+        </button>
+        <button className="btn btn-ghost" onClick={reset} disabled={running || isDefault}>
+          ↺ Reset to default blood rates
+        </button>
+      </div>
+
+      {error && <div className="alert">Simulation failed: {error}</div>}
+      {res && <CrisisResult res={res} stale={stale} />}
+    </section>
+  );
+}
+
+/** Donut of the people in crisis in one typical simulation, by age group. */
+function AgeDonut({ res }: { res: CrisisResponse }) {
+  const [hover, setHover] = useState<string | null>(null);
+  const total = res.example.length;
+  const without = res.example.filter((p) => !p.served).length;
+  const R = 70;
+  const r = 46;
+  const C = 2 * Math.PI;
+  const GAP = total > 1 ? 0.035 : 0; // radians of surface between slices
+  let a0 = -Math.PI / 2;
+  const arcs = AGE_ORDER.filter((a) => res.example_counts[a] > 0).map((a) => {
+    const n = res.example_counts[a];
+    const sweep = (n / total) * C;
+    const s0 = a0 + (sweep >= C - 1e-6 ? 0 : GAP / 2);
+    const s1 = a0 + sweep - (sweep >= C - 1e-6 ? 1e-4 : GAP / 2);
+    a0 += sweep;
+    const large = s1 - s0 > Math.PI ? 1 : 0;
+    const p = (rad: number, rr: number) => `${80 + rr * Math.cos(rad)} ${80 + rr * Math.sin(rad)}`;
+    const d = `M ${p(s0, R)} A ${R} ${R} 0 ${large} 1 ${p(s1, R)} L ${p(s1, r)} A ${r} ${r} 0 ${large} 0 ${p(s0, r)} Z`;
+    const lost = res.example.filter((x) => x.age_group === a && !x.served).length;
+    return { a, n, d, lost };
+  });
+  const label = (a: string) => res.age_group_labels[a].replace(/(\d)-(\d)/g, "$1–$2");
+  const h = arcs.find((x) => x.a === hover);
+
+  return (
+    <figure className="donut">
+      <svg viewBox="0 0 160 160" role="img" aria-label={`Who is in crisis: ${arcs.map((x) => `${x.n} ${label(x.a)}`).join(", ")}`}>
+        {arcs.map((x) => (
+          <path
+            key={x.a}
+            d={x.d}
+            fill={AGE_COLOR[x.a]}
+            className={hover && hover !== x.a ? "is-dim" : ""}
+            onMouseEnter={() => setHover(x.a)}
+            onMouseLeave={() => setHover(null)}
+          >
+            <title>{`${x.n} ${label(x.a)} · ${x.lost} without blood`}</title>
+          </path>
+        ))}
+        <text x="80" y="76" textAnchor="middle" className="donut-big">
+          {h ? h.n : without}
+        </text>
+        <text x="80" y="94" textAnchor="middle" className="donut-small">
+          {h ? (h.n === 1 ? "person" : "people") : `of ${total} without blood`}
+        </text>
+      </svg>
+      <figcaption className="donut-key">
+        {arcs.map((x) => (
+          <span
+            key={x.a}
+            onMouseEnter={() => setHover(x.a)}
+            onMouseLeave={() => setHover(null)}
+          >
+            <i style={{ background: AGE_COLOR[x.a] }} />
+            <b>{x.n}</b> {label(x.a)}
+            {x.lost > 0 && <small> · {x.lost} without</small>}
+          </span>
+        ))}
+      </figcaption>
+    </figure>
+  );
+}
+
+function CrisisResult({ res, stale }: { res: CrisisResponse; stale: boolean }) {
+  const ages = AGE_ORDER.filter((a) => res.example_counts[a] > 0).map((a) => {
+    const n = res.example_counts[a];
+    return `${n} ${n === 1 ? AGE_SINGULAR[a] : res.age_group_labels[a].replace(/(\d)-(\d)/g, "$1–$2")}`;
+  });
+  const span = fmtWindow(res.days).replace(/ \(.*\)$/, "");
+  const verdictText =
+    res.verdict === "enough"
+      ? `${res.country} has enough blood`
+      : res.verdict === "at_risk"
+        ? `${res.country} might not have enough blood`
+        : `${res.country} does not have enough blood`;
+  // With "crisis patients first", coping depends on holding blood back from others.
+  const enoughTail = res.crisis_first
+    ? " if hospitals put these patients first."
+    : " at the rate it collects blood.";
+  const shortTail = res.crisis_first
+    ? " even with crisis patients put first, because of the rate it collects blood"
+    : " because of the rate it collects blood";
+  const groups = res.by_group.filter((g) => g.share_of_sims_with_patients > 0.05);
+  const short = new Set(res.lacking);
+  const risky = new Set(res.at_risk);
+  // When no single group crosses the thresholds, still name the one most often short.
+  const worst = [...groups].sort((a, b) => b.p_short - a.p_short)[0];
+  const showWorst =
+    res.verdict !== "enough" && !res.lacking.length && !res.at_risk.length && worst && worst.p_short > 0;
+  const oNeg = res.by_group.find((g) => g.blood_group === "O-");
+  const chip = (g: string, cls: string) => (
+    <span key={g} className={`chip ${cls} sim-chip`}>
+      {groupLabel(g)}
+    </span>
+  );
+
+  return (
+    <div className={`sim-result verdict-${res.verdict} ${stale ? "is-stale" : ""}`} aria-live="polite">
+      {stale && <p className="sim-stale">Settings changed. Run the simulation again to update.</p>}
+      <p className="sim-verdict">
+        For <b>{res.people} {res.people === 1 ? "person" : "people"}</b>
+        {ages.length > 0 && <> ({listJoin(ages)})</>} in crisis over <b>{span}</b>,{" "}
+        <b className="sim-verdict-word">{verdictText}</b>
+        {res.verdict === "enough" ? (
+          <>{enoughTail}</>
+        ) : (
+          <>
+            {shortTail}
+            {res.lacking.length > 0 && <>. Short of {res.lacking.map((g) => chip(g, "chip-critical"))}</>}
+            {res.at_risk.length > 0 && (
+              <>
+                {res.lacking.length > 0 ? "; at risk: " : ". At risk: "}
+                {res.at_risk.map((g) => chip(g, "chip-low"))}
+              </>
+            )}
+            {showWorst && <>. Most often short: {chip(worst.blood_group, "chip-low")}</>}.
+          </>
+        )}
       </p>
-      <table className="rates calib-table">
-        <thead>
-          <tr>
-            <th>Country</th>
-            <th>Published</th>
-            <th>Model (likely range)</th>
-            <th>Fit</th>
-          </tr>
-        </thead>
-        <tbody>
-          {cal.rows.map((c) => {
-            const m = c.modelled_units;
-            const inside = c.requirement_units >= m.p10 && c.requirement_units <= m.p90;
-            const off = (m.p50 - c.requirement_units) / c.requirement_units;
-            return (
-              <tr key={c.country}>
-                <td>
-                  <a href={c.url} target="_blank" rel="noreferrer" title={c.note}>
-                    {c.country.replace("United Republic of ", "")}
-                  </a>{" "}
-                  <small className="rates-range">
-                    {c.year} · {c.source}
-                  </small>
-                </td>
-                <td>{fmtBig(c.requirement_units)}</td>
-                <td>
-                  {fmtBig(m.p50)}
-                  <small className="rates-range">
-                    {fmtBig(m.p10)}–{fmtBig(m.p90)}
-                  </small>
-                </td>
-                <td>
-                  <span className={`chip ${inside ? "chip-ok" : "chip-low"}`}>
-                    {inside ? "in range" : `${off > 0 ? "+" : "−"}${Math.round(Math.abs(off) * 100)}%`}
-                  </span>
-                </td>
+      <p className="sim-odds">
+        Everyone got blood in <b>{pct(res.p_all_served)}</b> of {fmt(res.draws)} simulations.
+        {res.o_neg_fallback && (
+          <>
+            {" "}
+            {res.o_neg_patients_helped >= 0.95 ? (
+              <>
+                O− covered about <b>{Math.round(res.o_neg_patients_helped)}</b>{" "}
+                {Math.round(res.o_neg_patients_helped) === 1 ? "patient" : "patients"} a run whose
+                own group had run out ({fmtRate(res.o_neg_given_units.p50)} units).
+              </>
+            ) : res.o_neg_patients_helped >= 0.005 ? (
+              <>
+                O− stepped in for a patient whose own group had run out in about{" "}
+                <b>{pct(Math.min(res.o_neg_patients_helped, 1))}</b> of runs.
+              </>
+            ) : (
+              <>
+                O− could not help:
+                {oNeg?.runs_dry_after_days != null
+                  ? ` it is the first group to run out (after about ${fmtDays(oNeg.runs_dry_after_days)} days of normal use).`
+                  : " no other group ran out while O− still had stock."}
+              </>
+            )}
+          </>
+        )}
+        {res.crisis_first && res.routine_displaced_units.p50 >= 0.5 && (
+          <>
+            {" "}
+            To do it, about <b>{fmtRate(res.routine_displaced_units.p50)}</b> units were held back
+            from other hospital patients.
+          </>
+        )}
+      </p>
+
+      <div className="sim-grid">
+        <div>
+          <h3 className="sim-h">By blood group</h3>
+          <table className="rates sim-table">
+            <thead>
+              <tr>
+                <th>Group</th>
+                <th>Needs</th>
+                <th>Short</th>
+                <th title="Share of simulations where someone with this group went without">Chance</th>
+                <th>Collected vs normal use a day</th>
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      <p className="fine">
-        Most national figures are themselves worked out from WHO's rule of
-        thumb (10 per 1,000 people); Tanzania's is the only one measured in
-        hospitals. Hover a country for its note.
+            </thead>
+            <tbody>
+              {groups.map((g) => (
+                <tr key={g.blood_group} className={short.has(g.blood_group) ? "is-short" : ""}>
+                  <th scope="row">{groupLabel(g.blood_group)}</th>
+                  <td>{fmtRate(g.units_needed.p50)}</td>
+                  <td>{g.units_short.p50 >= 0.05 ? fmtRate(g.units_short.p50) : "–"}</td>
+                  <td>
+                    <span
+                      className={`chip ${
+                        short.has(g.blood_group) ? "chip-critical" : risky.has(g.blood_group) ? "chip-low" : "chip-ok"
+                      }`}
+                    >
+                      {pct(g.p_short)}
+                    </span>
+                  </td>
+                  <td>
+                    {fmtRate(g.collected_per_day)} vs {fmtRate(g.routine_use_per_day)}
+                    <small className="rates-range">
+                      {g.runs_dry_after_days === null
+                        ? `stock of ${fmtRate(g.stock_at_start)} holds`
+                        : `stock of ${fmtRate(g.stock_at_start)} runs dry in ${fmtDays(g.runs_dry_after_days)} days`}
+                    </small>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div>
+          <h3 className="sim-h">Who is in crisis</h3>
+          <AgeDonut res={res} />
+        </div>
+      </div>
+
+      <p className="sim-scope">
+        This run covers sickle cell crises only and assumes nothing else
+        happens: no other emergencies, outbreaks or donation drives.
       </p>
     </div>
   );

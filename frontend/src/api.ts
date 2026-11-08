@@ -117,6 +117,8 @@ export interface ReservoirResponse {
   population: number;
   donations_per_year: number;
   donations_per_1000: number;
+  donation_history_years?: number[];
+  donations_reported_year?: number | null;
   share_in_care: number;
   /** General (non-SCD) need per 1000 people a year, calibrated. */
   need_per_1000: NeedRange;
@@ -159,6 +161,106 @@ export interface CalibrationResponse {
 export async function getCalibration(): Promise<CalibrationResponse> {
   const res = await fetch("/api/calibration");
   if (!res.ok) throw new Error(`/api/calibration failed: ${res.status}`);
+  return res.json();
+}
+
+export interface PoolPatient {
+  id: number;
+  sex: "male" | "female";
+  /** GBD age band, e.g. "5-9 years". */
+  age: string;
+  age_group: "under_5" | "children" | "teens" | "adults";
+  blood_group: string;
+}
+
+export interface CrisisPatient extends PoolPatient {
+  /** Day of the window the crisis starts. */
+  day: number;
+  /** Red-cell units this crisis needs. */
+  units: number;
+  served: boolean;
+}
+
+export interface CrisisGroup {
+  blood_group: string;
+  patients_mean: number;
+  share_of_sims_with_patients: number;
+  units_needed: Percentiles;
+  units_short: Percentiles;
+  /** Share of simulations with a patient of this group left without blood. */
+  p_short: number;
+  collected_per_day: number;
+  routine_use_per_day: number;
+  stock_at_start: number;
+  /** Days until normal use alone empties this group's stock; null if never. */
+  runs_dry_after_days: number | null;
+}
+
+export interface CrisisResponse {
+  country: string;
+  people: number;
+  days: number;
+  seed: number;
+  draws: number;
+  projection_year: number;
+  verdict: "enough" | "at_risk" | "not_enough";
+  p_all_served: number;
+  patients_unserved: Percentiles;
+  units_needed: Percentiles;
+  lacking: string[];
+  at_risk: string[];
+  by_group: CrisisGroup[];
+  /** One typical simulation, in the order the crises happen. */
+  example: CrisisPatient[];
+  example_counts: Record<string, number>;
+  age_group_labels: Record<string, string>;
+  pool: PoolPatient[];
+  trend: {
+    scd_people_now: number;
+    scd_people_data_year: number;
+    scd_data_year: number;
+    donation_years: number[];
+    donations_per_1000_history: number[];
+    donations_per_1000_now: Percentiles;
+    donation_growth_pct_per_year: number;
+    donation_fallback: boolean;
+    population_now: number;
+  };
+  collected_per_day: Percentiles;
+  routine_use_per_day: Percentiles;
+  target_days: number;
+  o_neg_fallback: boolean;
+  crisis_first: boolean;
+  /** O− units given to patients of other groups (O− fallback on). */
+  o_neg_given_units: Percentiles;
+  o_neg_patients_helped: number;
+  /** Units crisis patients took from other hospital patients (crisis-first on). */
+  routine_displaced_units: Percentiles;
+}
+
+export interface CrisisOptions {
+  /** Give O− when a patient's own group runs out. */
+  oNegFallback: boolean;
+  /** Serve crisis patients before normal hospital use. */
+  crisisFirst: boolean;
+}
+
+/** A new random patient pool and simulation on every call. */
+export async function getCrisis(
+  country: string,
+  people: number,
+  days: number,
+  opts: CrisisOptions,
+): Promise<CrisisResponse> {
+  const q = new URLSearchParams({
+    country,
+    people: String(people),
+    days: String(days),
+    o_neg_fallback: String(opts.oNegFallback),
+    crisis_first: String(opts.crisisFirst),
+  });
+  const res = await fetch(`/api/crisis?${q}`);
+  if (!res.ok) throw new Error(`/api/crisis failed: ${res.status}`);
   return res.json();
 }
 

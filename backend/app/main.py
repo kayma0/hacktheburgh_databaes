@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from . import crisis as crisis_mod
 from . import hotspots as hotspots_mod
 from . import model
 from . import reservoir as reservoir_mod
@@ -17,6 +18,7 @@ from .schemas import (
     BriefingRequest,
     BriefingResponse,
     CalibrationResponse,
+    CrisisResponse,
     HotspotsResponse,
     ReservoirResponse,
     SimulateRequest,
@@ -112,6 +114,26 @@ def calibration():
     """General blood need per 1000 people, fitted to published national requirements,
     and how the calibrated model compares with each of them."""
     return reservoir_mod.calibrate_need()
+
+
+@app.get("/api/crisis", response_model=CrisisResponse)
+def crisis(
+    country: str,
+    people: int = Query(25, ge=1, le=crisis_mod.MAX_PEOPLE),
+    days: int = Query(30, ge=1, le=crisis_mod.MAX_DAYS),
+    seed: int | None = Query(None, ge=0, description="Fix to repeat a run; random if left out"),
+    o_neg_fallback: bool = Query(False, description="Give O- when a patient's own group runs out"),
+    crisis_first: bool = Query(False, description="Serve crisis patients before normal hospital use"),
+):
+    """Monte Carlo of `people` sickle cell crises in a `days`-long window, drawn from a
+    100-patient pool for `country`: can the blood supply cover them?"""
+    import secrets
+    run_seed = seed if seed is not None else secrets.randbelow(2**31)
+    try:
+        return crisis_mod.simulate_crisis(
+            country, people, days, run_seed, o_neg_fallback, crisis_first)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"No data for country: {country}")
 
 
 @app.get("/api/reservoir", response_model=ReservoirResponse)

@@ -147,6 +147,8 @@ class ReservoirResponse(BaseModel):
     population: float
     donations_per_year: float
     donations_per_1000: float
+    donation_history_years: list[int] = []
+    donations_reported_year: int | None = None
     share_in_care: float
     need_per_1000: NeedRange
     scd_patients: float
@@ -157,6 +159,77 @@ class ReservoirResponse(BaseModel):
     scd_demand_per_day: Percentiles
     scd_share_of_demand: Percentiles
     types: list[ReservoirType]
+
+
+class PoolPatient(BaseModel):
+    id: int
+    sex: str
+    age: str = Field(description="GBD age band, e.g. '5-9 years'")
+    age_group: str = Field(description="under_5 | children | teens | adults")
+    blood_group: str
+
+
+class CrisisPatient(PoolPatient):
+    day: float = Field(description="Day of the window the crisis starts")
+    units: float = Field(description="Red-cell units this crisis needs")
+    served: bool
+
+
+class CrisisGroup(BaseModel):
+    blood_group: str
+    patients_mean: float
+    share_of_sims_with_patients: float
+    units_needed: Percentiles
+    units_short: Percentiles
+    p_short: float = Field(description="Share of simulations with a patient of this group left unserved")
+    collected_per_day: float
+    routine_use_per_day: float
+    stock_at_start: float
+    runs_dry_after_days: float | None = Field(
+        description="Days until normal use alone empties this group's stock; null if never")
+
+
+class CrisisTrend(BaseModel):
+    scd_people_now: float
+    scd_people_data_year: float
+    scd_data_year: int
+    donation_years: list[int]
+    donations_per_1000_history: list[float]
+    donations_per_1000_now: Percentiles
+    donation_growth_pct_per_year: float
+    donation_fallback: bool
+    population_now: float
+
+
+class CrisisResponse(BaseModel):
+    country: str
+    people: int
+    days: int
+    seed: int
+    draws: int
+    projection_year: int
+    verdict: str = Field(description="enough | at_risk | not_enough")
+    p_all_served: float
+    patients_unserved: Percentiles
+    units_needed: Percentiles
+    lacking: list[str]
+    at_risk: list[str]
+    by_group: list[CrisisGroup]
+    example: list[CrisisPatient]
+    example_counts: dict[str, int]
+    age_group_labels: dict[str, str]
+    pool: list[PoolPatient]
+    trend: CrisisTrend
+    collected_per_day: Percentiles
+    routine_use_per_day: Percentiles
+    target_days: float
+    o_neg_fallback: bool = False
+    crisis_first: bool = False
+    o_neg_given_units: Percentiles = Field(
+        description="O- units given to patients of other groups (O- fallback on)")
+    o_neg_patients_helped: float = Field(description="Mean number of such patients per simulation")
+    routine_displaced_units: Percentiles = Field(
+        description="Units crisis patients took from other hospital patients (crisis-first on)")
 
 
 class BriefingRequest(BaseModel):

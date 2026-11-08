@@ -139,6 +139,9 @@ MODELLED stock levels, not live blood-bank figures. One row per country in
   Guinea-Bissau, Sierra Leone and Somalia reported nothing: ASSUMPTION 5.2 per 1000 (WHO
   AFRO 2022 survey regional average).
 - **Population**: World Bank `SP.POP.TOTL` for the same year as the donations.
+- The donation and population columns above are the latest *reported* year. Since the
+  crisis simulator was added, the page projects both to the current year instead (see
+  "Trend fitting" below); the CSV's blood-group mix and reserve target are still used.
 - **Blood-group mix (O+ ... AB-)**: Wikipedia, "Blood type distribution by country"
   (a compilation of national studies) for 22 countries. Others: ASSUMPTION, the average of
   the countries with data in the same sub-region (North Africa = UN M49 Northern Africa;
@@ -150,12 +153,12 @@ MODELLED stock levels, not live blood-bank figures. One row per country in
 
 1. Donor mix per draw ~ Dirichlet around the country's shares (concentration 400 if
    cited, 60 if assumed).
-2. Usable units/day = donations/365 × (1 − discard), discard ~ triangular(0.08, 0.156,
+2. Usable units/day = this year's projected donations (trend fitting, below) / 365 × (1 − discard), discard ~ triangular(0.08, 0.156,
    0.25). 15.6% = WHO AFRO 2022 survey (33 countries); the range is an ASSUMPTION.
-3. General (non-SCD) need/day = population × triangular(min, mode, max) per 1000 / 365,
+3. General (non-SCD) need/day = this year's projected population × triangular(min, mode, max) per 1000 / 365,
    **calibrated** (see below), currently about triangular(5.7, 7.3, 8.7).
-4. SCD load/day = GBD prevalence by age (male + female, same year as the donations) ×
-   share in care (slider, ASSUMPTION, default 30%) × transfusion events per patient-year
+4. SCD load/day = GBD prevalence by age (male + female, latest year, scaled to this year's
+   trend projection) × share in care (ASSUMPTION, 30%) × transfusion events per patient-year
    ~ triangular(0.30, 0.432, 0.60) (REACH) × units per transfusion by age (the app's
    existing age bands; GBD 20+ uses the adult dose). Added to step 3; because step 3 is
    calibrated with SCD use taken out, the two do not double count.
@@ -191,3 +194,77 @@ stated as the WHO 10-per-1000 rule applied to population, Kenya's is about 1% of
 population, and Ghana's is close to 9 per 1000. Only Tanzania's comes from a hospital
 survey. With four points the range is narrow and does not capture uncertainty in the
 targets themselves. Adding a country is one new row in the CSV; the fit updates on restart.
+
+## Trend fitting (`backend/app/trends.py`)
+
+Both the reservoir bags and the crisis simulator use the current year (2026), not the last
+year with data.
+
+- **Donations per 1000 people**: `data/donations_history.csv` holds every year WHO reports
+  for each country (GSR 2021 Annex 3: 2014, 2015, 2017, 2018; each row checked so the parts
+  add up, or flagged where they don't), plus newer national figures: Ghana 2024 (187,280)
+  and 2025 (204,000), Nigeria 2024 (371,827, NBSC via WHO Africa) and Kenya FY2021/22
+  (384,000, KTTA). Divided by World Bank population for that year (`data/population.csv`,
+  2014-2025). The slope is a weighted least-squares fit on log(rate), with each year's
+  weight halving every 5 years back, then **shrunk toward zero** by a prior that national
+  rates change by about 3% a year (normal prior, SD 0.03) and capped at ±8% a year. So a
+  short, noisy series (Chad: 5.5, 1.6, 4.6) projects nearly flat, and only a clear trend
+  carries forward. The projection starts from the **latest reported figure** and applies
+  that slope to the current year; the scatter of the series around the fit is the level's
+  uncertainty. Countries with no figures use 5.2 per 1000 (WHO AFRO 2022 average).
+  ASSUMPTIONS: the prior, cap and half-life.
+- **Population**: World Bank up to 2025, then the last five years' growth.
+- **People with SCD by sex and age**: each of the 14 GBD groups (7 ages × 2 sexes) is fitted
+  log-linearly over 2014-2023 and projected to the current year. This sets the age/sex mix
+  of the simulator's patient pool and scales SCD hospital use.
+
+## Crisis simulator (`backend/app/crisis.py`, `GET /api/crisis`)
+
+The reservoir page's two sliders choose **N people in crisis** (1-50) and a **time frame**
+(1-365 days). Each press of the button is a new run:
+
+1. **Patient pool**: 100 patients drawn at random (new seed each run) from the country's
+   projected age/sex mix above. Each gets a blood group drawn from
+   `data/blood_groups_simple.json`, a single global ABO/RhD distribution (as in the team's
+   `usecases.json`; not country-specific).
+2. **5,000 Monte Carlo draws**. In each: N patients picked at random from the pool without
+   replacement; each crisis starts on a uniformly random day in the window; each needs a
+   red-cell dose for their age (`meta.blood_ml_assumption` in `usecases.json`,
+   triangular min/mode/max mL, ×0.9 for women aged 15+, 250 mL per unit). Supply in the draw
+   is the reservoir model's: donor mix, discard, calibrated general need and SCD use, all at
+   this year's projection.
+3. **Serving**: crises are handled in the order they happen. A patient is served if their
+   group's blood available at that moment covers their dose: stock at the start of the
+   window (target days × min(collections, normal use) per group) plus collections minus
+   normal hospital use up to that day, minus what earlier crisis patients took. Groups
+   where normal use exceeds collections drain over the window, so longer windows are harder
+   for those countries and easier for those with spare collections. By default patients
+   receive only their own blood group.
+
+   Two switches change the serving rule (both off by default; "Reset to default blood
+   rates" turns them off and puts the sliders back to 25 people, 30 days):
+   - **Use O− when a group runs out**: a patient whose own group has nothing left gets O−
+     (the universal red-cell donor) if O− has enough at that moment. Because hospitals
+     already pull hardest on O− (demand weight 2.2), O− is usually the first group to run
+     dry, so this mostly helps rare groups (AB−, B−) in countries with spare O−. The
+     result says how often O− stepped in, or that it couldn't because it ran out first.
+   - **Crisis patients first**: crisis patients draw on stock plus *all* usable
+     collections, and normal hospital use waits. The result reports the units held back
+     from other hospital patients: crisis use beyond what was spare after normal use over
+     the window.
+4. **Result**: the share of draws where everyone was served gives the verdict: enough
+   (≥ 90%), might not have enough (50-90%), not enough (< 50%). A group is "short" if, in
+   draws that picked someone with that group, that person went without at least half the
+   time ("at risk" from 20%). The sentence describes one typical draw (median number left
+   without blood, total need nearest the median) by age group, and the pool picture rings
+   the patients picked in it.
+
+The page states that each run covers sickle cell crises only and assumes nothing else
+happens (no other emergencies, outbreaks or donation drives). The result shows a table by
+blood group and a donut of the people in crisis in one typical run, by age group, with
+the number who went without blood.
+
+Caveats: the global blood-group distribution gives more AB+, A- and B- patients than
+African donor mixes, which pushes those groups toward shortage; everyone in crisis needs
+one episode's worth of blood; O− is the only substitute modelled (not full ABO/Rh
+compatibility). All MODELLED, not live stock.
