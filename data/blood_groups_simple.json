@@ -1,0 +1,42 @@
+[
+  {
+    "rank": 1,
+    "blood_group": "O+",
+    "probability": 0.454
+  },
+  {
+    "rank": 2,
+    "blood_group": "A+",
+    "probability": 0.21
+  },
+  {
+    "rank": 3,
+    "blood_group": "B+",
+    "probability": 0.177
+  },
+  {
+    "rank": 4,
+    "blood_group": "AB+",
+    "probability": 0.067
+  },
+  {
+    "rank": 5,
+    "blood_group": "O-",
+    "probability": 0.034
+  },
+  {
+    "rank": 6,
+    "blood_group": "A-",
+    "probability": 0.028
+  },
+  {
+    "rank": 7,
+    "blood_group": "B-",
+    "probability": 0.026
+  },
+  {
+    "rank": 8,
+    "blood_group": "AB-",
+    "probability": 0.004
+  }
+]
