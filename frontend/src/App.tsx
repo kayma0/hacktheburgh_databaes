@@ -50,10 +50,6 @@ const MONTHS = [
 // The app is the hotspots map plus the blood reservoir page. StockPage and BriefingPage
 // below are kept but not routed (the stock model's data/raw/ files are missing).
 type Page = "hotspots" | "reservoir";
-const PAGES: { id: Page; num: string; label: string }[] = [
-  { id: "hotspots", num: "01", label: "Hotspots" },
-  { id: "reservoir", num: "02", label: "Blood reservoir" },
-];
 const ALL_PAGES: Page[] = ["hotspots", "reservoir"];
 
 const fmt = (n: number) => Math.round(n).toLocaleString("en-GB");
@@ -108,7 +104,7 @@ export default function App() {
 
   return (
     <div className="shell">
-      <header className="mast">
+      <header className={`mast ${page === "hotspots" ? "is-wide" : ""}`}>
         <div className="mast-inner">
           <a className="brand" href="#/hotspots" aria-label="SickleSignal home">
             <BrandMark />
@@ -116,18 +112,6 @@ export default function App() {
               <em>Sickle</em>Signal
             </span>
           </a>
-          <nav className="tabs" aria-label="Pages">
-            {PAGES.map((p) => (
-              <button
-                key={p.id}
-                className={`tab ${page === p.id ? "is-on" : ""}`}
-                onClick={() => go(p.id)}
-              >
-                <span className="tab-num">{p.num}</span>
-                {p.label}
-              </button>
-            ))}
-          </nav>
           {isSample && <span className="stamp">Sample data</span>}
         </div>
       </header>
@@ -151,29 +135,24 @@ export default function App() {
         )}
       </main>
 
-      <footer className="foot">
+      <footer className={`foot ${page === "hotspots" ? "is-wide" : ""}`}>
         <span>SickleSignal</span>
         <span>
           Not a medical device · No clinical advice · Aggregate, modelled
           estimates only
         </span>
-        <span>Method &amp; sources: docs/METHOD.md</span>
       </footer>
     </div>
   );
 }
 
 function BrandMark() {
+  // The SickleSignal logo: a blood drop with two signal arcs above it.
   return (
-    <svg className="brand-mark" viewBox="0 0 32 40" aria-hidden>
-      <path
-        d="M16 2 C16 2 4 17 4 26 a12 12 0 0 0 24 0 C28 17 16 2 16 2Z"
-        fill="currentColor"
-      />
-      <path
-        d="M12 21 a8 8 0 1 0 9 12 a6.2 6.2 0 1 1 -9 -12Z"
-        fill="var(--oxblood)"
-      />
+    <svg className="brand-mark" viewBox="60 60 1056 880" aria-hidden>
+      <path d="M85 318Q588-152 1091 318Q588 32 85 318Z" fill="#F0AAB4" />
+      <path d="M202 417Q588 57 973 417Q588 211 202 417Z" fill="#E5667A" />
+      <path d="M588 377L430 650A183 183 0 1 0 746 650Z" fill="#D81F3A" />
     </svg>
   );
 }
@@ -910,6 +889,15 @@ const HEAT_CLASSES = [
 const heatClass = (h: number) =>
   HEAT_CLASSES.find((c) => h >= c.min) ?? HEAT_CLASSES[HEAT_CLASSES.length - 1];
 const heatColor = (h: number) => heatClass(h).color;
+// The map is coloured by the legend bucket from data/processed/heatmap.json.
+const BUCKET_CLASS: Record<string, number> = {
+  "very high": 0,
+  high: 1,
+  moderate: 2,
+  low: 3,
+  "very low": 4,
+};
+const bucketClass = (b: string) => HEAT_CLASSES[BUCKET_CLASS[b] ?? 4];
 
 const fmtBig = (n: number) => {
   const a = Math.abs(n);
@@ -1091,6 +1079,7 @@ function HotspotsPage({
   );
   const selected = data?.items.find((i) => i.country === sel) ?? null;
   const selectedGeo = GEO.countries.filter((g) => g.name === sel);
+  const year = data?.year ?? 2026;
   const dataYear = data?.data_year ?? 2023;
 
   const showTip = (e: ReactMouseEvent, name: string) => {
@@ -1098,12 +1087,12 @@ function HotspotsPage({
     if (r) setTip({ name, x: e.clientX - r.left, y: e.clientY - r.top });
   };
 
-  const cls = selected ? heatClass(selected.heat) : null;
+  const cls = selected ? bucketClass(selected.bucket) : null;
   const rank = selected ? (data?.items.findIndex((i) => i.country === selected.country) ?? 0) + 1 : 0;
-  const totalCases = (data?.items ?? []).reduce((a, i) => a + i.cases_now.p50, 0) || 1;
+  const totalCases = (data?.items ?? []).reduce((a, i) => a + i.cases, 0) || 1;
   const shareOfTotal = selected
-    ? ((selected.cases_now.p50 / totalCases) * 100).toFixed(
-        selected.cases_now.p50 / totalCases < 0.1 ? 1 : 0,
+    ? ((selected.cases / totalCases) * 100).toFixed(
+        selected.cases / totalCases < 0.1 ? 1 : 0,
       )
     : "0";
 
@@ -1120,13 +1109,6 @@ function HotspotsPage({
             disease. Tap a country to see its numbers.
           </p>
         </div>
-        <button
-          className="btn ah-next"
-          onClick={() => sel && onNext(sel)}
-          disabled={!sel}
-        >
-          {sel ? `${sel}'s blood reservoir →` : "Next page →"}
-        </button>
       </header>
 
       <div className="atlas">
@@ -1154,13 +1136,13 @@ function HotspotsPage({
                   key={`${g.name}-${i}`}
                   d={g.d}
                   className={`ctry ${it ? "has-data" : "no-data"}`}
-                  style={it ? { fill: heatColor(it.heat) } : undefined}
+                  style={it ? { fill: bucketClass(it.bucket).color } : undefined}
                   onClick={() => it && pick(g.name)}
                   onMouseMove={(e) => showTip(e, g.name)}
                   tabIndex={it ? 0 : -1}
                   role={it ? "button" : undefined}
                   aria-label={
-                    it ? `${g.name}, ${heatClass(it.heat).label}` : undefined
+                    it ? `${g.name}, ${bucketClass(it.bucket).label}` : undefined
                   }
                   onKeyDown={(e) => it && e.key === "Enter" && setSel(g.name)}
                 />
@@ -1176,7 +1158,7 @@ function HotspotsPage({
                   cy={g.cy}
                   r={5 / mz.zoom}
                   className="island"
-                  style={{ fill: heatColor(byName.get(g.name)!.heat) }}
+                  style={{ fill: bucketClass(byName.get(g.name)!.bucket).color }}
                   onClick={() => pick(g.name)}
                   onMouseMove={(e) => showTip(e, g.name)}
                 />
@@ -1214,7 +1196,7 @@ function HotspotsPage({
               <b>{tip.name}</b>
               {byName.get(tip.name) ? (
                 <span>
-                  {fmtBig(byName.get(tip.name)!.cases_now.p50)} people living
+                  {fmtBig(byName.get(tip.name)!.cases)} people living
                   with SCD
                 </span>
               ) : (
@@ -1232,10 +1214,6 @@ function HotspotsPage({
                 ))}
             </span>
             <span className="legend-title">More</span>
-            <span className="legend-item legend-gap">
-              <i className="legend-nodata" />
-              No data
-            </span>
           </div>
         </figure>
 
@@ -1256,12 +1234,12 @@ function HotspotsPage({
 
               <section className="block">
                 <p className="block-label">
-                  People living with sickle cell disease, {dataYear}
+                  People living with sickle cell disease, {year} (estimated)
                 </p>
-                <p className="big">{fmtBig(selected.cases_now.p50)}</p>
+                <p className="big">{fmtBig(selected.cases)}</p>
                 <p className="rng">
-                  likely between {fmtBig(selected.cases_now.p10)} and{" "}
-                  {fmtBig(selected.cases_now.p90)}
+                  likely between {fmtBig(selected.cases_low)} and{" "}
+                  {fmtBig(selected.cases_high)}
                 </p>
               </section>
 
@@ -1277,9 +1255,14 @@ function HotspotsPage({
               </dl>
 
               <p className="country-note">
-                Modelled estimates from the Global Burden of Disease study, with
-                a likely range. Not a medical device.
+                Estimated for {year} by carrying the Global Burden of Disease
+                trend forward from {dataYear}. Modelled, not observed. Not a
+                medical device.
               </p>
+
+              <button className="btn" onClick={() => onNext(selected.country)}>
+                {selected.country}'s blood reservoir →
+              </button>
             </article>
           )}
         </aside>

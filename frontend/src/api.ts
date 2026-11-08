@@ -53,15 +53,31 @@ export interface SimulateRequest {
   crisis_by_age?: Record<string, number>;
 }
 
+export interface HeatBucket {
+  label: string;
+  max_cases: number | null;
+}
+
 export interface HotspotItem {
   country: string;
-  /** 0-1: people living with SCD relative to the highest country (square-rooted). */
-  heat: number;
-  cases_now: Percentiles;
+  iso3: string;
+  /** Estimated people living with SCD in `year`. */
+  cases: number;
+  cases_low: number;
+  cases_high: number;
+  growth_pct_per_year: number;
+  /** 0-1, log-scaled cases. */
+  intensity: number;
+  /** "very low" | "low" | "moderate" | "high" | "very high" */
+  bucket: string;
 }
 
 export interface HotspotsResponse {
+  year: number;
   data_year: number;
+  source: string;
+  method: string;
+  buckets: HeatBucket[];
   items: HotspotItem[];
 }
 

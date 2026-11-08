@@ -103,8 +103,8 @@ def simulate(req: SimulateRequest):
 
 @app.get("/api/hotspots", response_model=HotspotsResponse)
 def hotspots():
-    """Every country from data/raw.csv: people living with SCD, ranked by heat."""
-    return hotspots_mod.compute_hotspots()
+    """Every country in data/processed/heatmap.json, highest number of cases first."""
+    return hotspots_mod.load_heatmap()
 
 
 @app.get("/api/calibration", response_model=CalibrationResponse)

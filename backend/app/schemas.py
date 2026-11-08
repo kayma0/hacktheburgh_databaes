@@ -63,15 +63,28 @@ class SimulateResponse(BaseModel):
     units_avoided: Percentiles
 
 
+class HeatBucket(BaseModel):
+    label: str
+    max_cases: int | None = None
+
+
 class HotspotItem(BaseModel):
     country: str
-    heat: float = Field(
-        description="0-1: people living with SCD relative to the highest country (square-rooted)")
-    cases_now: Percentiles
+    iso3: str
+    cases: int
+    cases_low: int
+    cases_high: int
+    growth_pct_per_year: float
+    intensity: float = Field(description="0-1, log-scaled cases")
+    bucket: str
 
 
 class HotspotsResponse(BaseModel):
+    year: int
     data_year: int
+    source: str
+    method: str
+    buckets: list[HeatBucket]
     items: list[HotspotItem]
 
 

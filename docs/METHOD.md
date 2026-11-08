@@ -72,22 +72,18 @@ Every output is reported as P10 / P50 / P90.
   sliders in the UI.
 - Donations must be voluntary, unpaid, and go through a licensed national blood service.
 
-## Hotspots page (`backend/app/hotspots.py`, reads `data/raw.csv`)
+## Hotspots page (`backend/app/hotspots.py`, reads `data/processed/heatmap.json`)
 
-`data/raw.csv` is the GBD export of sickle cell disorders **prevalence** (number of
-people, all ages, both sexes) for 54 African countries, 1996-2023, with a 95% interval.
-10,000 Monte Carlo draws per country (seed `20261107`), reported as P10/P50/P90:
-
-1. People living with SCD ~ lognormal matched to the latest (2023) value and its 95%
-   interval.
-2. Heat (map shading) = sqrt(people living with SCD / highest country), so mid-sized
-   countries stay visible next to Nigeria. Five classes: Highest >= 0.4, High >= 0.2,
-   Medium >= 0.1, Lower >= 0.03, Lowest below that.
-3. Rank and "share of all people counted" use each country's median, out of the 54
-   countries in the file.
-
-There is deliberately no forecast on this page. The data counts all sickle cell
-disorders, not only sickle cell anaemia.
+The map is drawn from `data/processed/heatmap.json` (how that file is built is described
+under "Pre-built data files" below), served by `/api/hotspots`. For each of 54 African
+countries the page shows the file's estimate of people living with sickle cell disorders
+in 2026, its low-high range, and its legend bucket (very low < 1,000; low < 10,000;
+moderate < 100,000; high < 500,000; very high otherwise) as the fill colour. "Rank" and
+"share of all people counted" use each country's `cases`. The 2026 figures are a trend
+carried forward from 2023, so they are modelled, not observed. The data counts all
+sickle cell disorders, not only sickle cell anaemia. There is deliberately no further
+forecast on this page. `hotspots.load_series` still reads `data/raw.csv` for the
+country list used by the blood-reservoir page.
 
 ## Use-case personas (`scripts/build_data.py`, writes `data/processed/usecases.json`)
 

@@ -86,9 +86,9 @@ code {
   text-decoration: none;
 }
 .brand-mark {
-  width: 22px;
-  height: 28px;
-  color: var(--salmon);
+  width: 48px;
+  height: 40px;
+  background: none;
 }
 .brand-word {
   font-family: var(--display);
@@ -1913,7 +1913,7 @@ input[type="range"]:focus-visible {
   padding: 0 0 26px;
 }
 .block-label {
-  margin: 0 0 8px;
+  margin: 0 0 px;
   font-size: 13px;
   color: var(--ink-soft);
 }
@@ -1924,7 +1924,7 @@ input[type="range"]:focus-visible {
   font-size: 52px;
   line-height: 1;
   letter-spacing: -0.04em;
-  color: #D4141B;
+  color: #d4141b;
 }
 .rng {
   margin: 8px 0 0;
@@ -2281,5 +2281,23 @@ input[type="range"]:focus-visible {
   .assume .calib,
   .assume .hero-actions {
     grid-column: auto;
+  }
+}
+
+/* line the header and footer up with the wide hotspots page */
+.mast.is-wide .mast-inner,
+.foot.is-wide {
+  max-width: 1380px;
+}
+
+.country .btn {
+  width: 100%;
+  margin-top: 20px;
+}
+
+/* lift the country card up into the empty space beside the headline */
+@media (min-width: 961px) {
+  .atlas-side {
+    margin-top: -73px;
   }
 }

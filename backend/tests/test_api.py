@@ -46,18 +46,20 @@ def test_briefing_fallback_without_api_key(monkeypatch):
     assert r.json()["fallback_used"] is True
 
 
-def test_hotspots_shape_and_ordering():
+def test_hotspots_from_processed_heatmap():
     r = client.get("/api/hotspots")
     assert r.status_code == 200
     body = r.json()
-    assert body["data_year"] == 2023
+    assert body["year"] == 2026 and body["data_year"] == 2023
+    assert [b["label"] for b in body["buckets"]] == [
+        "very low", "low", "moderate", "high", "very high"]
     items = body["items"]
     assert len(items) == 54
-    assert items[0]["country"] == "Nigeria" and items[0]["heat"] == 1.0
-    assert [i["heat"] for i in items] == sorted((i["heat"] for i in items), reverse=True)
+    assert items[0]["country"] == "Nigeria" and items[0]["intensity"] == 1.0
+    assert [i["cases"] for i in items] == sorted((i["cases"] for i in items), reverse=True)
     for it in items:
-        p = it["cases_now"]
-        assert p["p10"] <= p["p50"] <= p["p90"]
+        assert it["cases_low"] <= it["cases"] <= it["cases_high"]
+        assert 0 <= it["intensity"] <= 1
 
 
 BLOOD_TYPES = ["O+", "A+", "B+", "AB+", "O-", "A-", "B-", "AB-"]

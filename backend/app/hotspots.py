@@ -1,5 +1,9 @@
 """Africa SCD hotspots: how many people live with sickle cell disease in each country.
 
+The hotspots MAP is served from data/processed/heatmap.json (see `load_heatmap`). The raw
+GBD series below (`load_series`) is still used by the blood-reservoir code for its country
+list.
+
 Reads data/raw.csv (GBD sickle cell disorders prevalence, number of people, all ages,
 by country and year, with a 95% uncertainty interval). Every output is MODELLED and
 reported as P10/P50/P90 over a fixed-seed Monte Carlo. See docs/METHOD.md.
@@ -7,6 +11,7 @@ reported as P10/P50/P90 over a fixed-seed Monte Carlo. See docs/METHOD.md.
 from __future__ import annotations
 
 import csv
+import json
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -14,6 +19,7 @@ from pathlib import Path
 import numpy as np
 
 RAW_CSV = Path(__file__).resolve().parent.parent.parent / "data" / "raw.csv"
+HEATMAP_JSON = Path(__file__).resolve().parent.parent.parent / "data" / "processed" / "heatmap.json"
 
 N_DRAWS = 10_000
 SEED = 20261107
@@ -78,3 +84,22 @@ def compute_hotspots() -> dict:
 
     data_year = int(next(iter(load_series().values())).years[-1])
     return {"data_year": data_year, "items": items}
+
+
+@lru_cache(maxsize=1)
+def load_heatmap() -> dict:
+    """data/processed/heatmap.json for the map: per-country estimate for `meta.year`
+    (a GBD trend carried forward from `meta.data_year`), low/high range, log-scaled
+    intensity and legend bucket. Countries sorted by cases, highest first."""
+    if not HEATMAP_JSON.exists():
+        raise FileNotFoundError(f"Missing hotspot data: {HEATMAP_JSON}")
+    raw = json.loads(HEATMAP_JSON.read_text(encoding="utf-8"))
+    meta = raw["meta"]
+    return {
+        "year": int(meta["year"]),
+        "data_year": int(meta["data_year"]),
+        "source": meta["source"],
+        "method": meta["method"],
+        "buckets": meta["scale"]["buckets"],
+        "items": sorted(raw["countries"], key=lambda c: c["cases"], reverse=True),
+    }
