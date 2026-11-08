@@ -4,73 +4,21 @@ This app estimates blood demand from sickle cell disease (SCD) and the donors ne
 cover a chosen share of that demand. Every output is a MODELLED estimate with uncertainty,
 never a single point figure.
 
-## Data sources
+## Data files the app reads
 
-- `data/raw/burden.csv` — affected children per country (P50, 2.5th/97.5th percentile).
-  Source: GBD 2021 / Lancet Child & Adolescent Health SCD burden estimates. Until real data
-  is placed there, `burden_SAMPLE.csv` is used and the UI shows a SAMPLE DATA banner.
-- `data/raw/who_blood.csv` — **real data**, replacing the sample. National whole-blood
-  donation totals for 2018, from WHO, _Global status report on blood safety and
-  availability 2021_ (Annex 3, "Blood donations 2014–2018"),
-  https://www.who.int/publications/i/item/9789240051683. `donations_per_1000` is
-  computed from that total and the matching UN WPP 2024 mid-year population estimate
-  (see `un_wpp_population_projections.csv` below). Caveat: Nigeria's figure is flagged
-  `partial_national_coverage` in the source report (not all facilities reported), so it
-  likely understates the true national rate.
-- `data/raw/parameters.yaml` — min/mode/max for each model parameter with a source, or
-  `ASSUMPTION` if none was found.
-- `data/raw/africa_hotspot.csv` — national sickle cell anaemia (SCA) birth frequency and
-  projected newborns with SCA, 2010 vs. 2050, plus each country's global rank by
-  cumulative SCA births 2010–2050. Source: Piel FB et al. (2013), "Global Epidemiology
-  of Sickle Haemoglobin in Neonates," _PLOS Medicine_ 10(7):e1001484, Table S2,
-  https://doi.org/10.1371/journal.pmed.1001484.s003. Not yet wired into the backend —
-  intended for the planned Africa hotspots page. Note: this paper's own population
-  projections date from ~2013 (pre-dating UN WPP 2024), so for forward projections
-  prefer combining its SCA _frequency_ (which is a biological/genetic rate, not
-  time-sensitive) with current UN WPP birth projections below, rather than using its
-  2050 birth figures directly.
-- `data/raw/un_wpp_population_projections.csv` — population, births, under-5 deaths and
-  under-5 mortality rate (Q5) per country, 2015–2050, medium-variant projection. Source:
-  UN World Population Prospects 2024, https://population.un.org/wpp/. Intended for
-  scaling future SCA case/mortality projections on the hotspots page.
-- Untreated child mortality for the hotspots page: no file yet, but the citable estimate
-  is Grosse SD et al. (2011), "Sickle Cell Disease in Africa: A Neglected Cause of Early
-  Childhood Mortality," _Am J Prev Med_ 41(6 Suppl 4):S398-405 (free full text:
-  https://pmc.ncbi.nlm.nih.gov/articles/PMC3708126) — 50%–90% of children born with SCA
-  in Africa die before age 5 without diagnosis/treatment. The authors themselves flag
-  the underlying data as weak, so treat this as a wide-uncertainty triangular
-  distribution (e.g. min 0.50 / mode 0.70 / max 0.90), not a point estimate.
-- `burden.csv` is still the sample (GBD 2021 Results Tool requires a free account and an
-  interactive query — see project notes for exact filter settings to export the real
-  file).
+Each section below says which files it uses and what is an ASSUMPTION.
 
-## Model
+- `data/raw.csv`, `data/male_raw.csv`, `data/female_raw.csv` — GBD 2021 sickle cell
+  disorders prevalence (all ages / by age and sex) for 54 African countries, 1996-2023.
+- `data/processed/heatmap.json`, `data/processed/usecases.json` — pre-built from the
+  files above by `scripts/build_data.py` (see below).
+- `data/blood_supply.csv`, `data/donations_history.csv`, `data/population.csv`,
+  `data/need_calibration.csv`, `data/blood_groups_simple.json` — blood supply, donation
+  history, population, national need figures and ABO/RhD mix, each tagged with its source
+  or `ASSUMPTION`.
 
-`backend/app/model.py` draws 10,000 Monte Carlo samples (fixed seed `20261107`):
-
-1. Affected children ~ lognormal fitted to the P50 and 95% interval from `burden.csv`.
-2. Diagnosed children = affected children × `share_diagnosed` (ASSUMPTION, adjustable).
-3. Transfusion events/year = triangular-distributed rates per 100 person-years:
-   - Untreated: min 30 / mode 43.2 / max 60 (REACH trial, clinic-based children — not
-     generalisable to all settings).
-   - On hydroxyurea: min 6 / mode 10.8 / max 18 (REACH trial, maximum dose).
-4. Units per event ~ triangular (ASSUMPTION).
-5. Demand = events × units. Donors needed = demand × target coverage / (1 − donor
-   deferral rate, ASSUMPTION).
-6. Baseline scenario assumes current diagnosis rate and no hydroxyurea use. The
-   "universal diagnosis + hydroxyurea" scenario assumes all affected children are
-   diagnosed and a chosen share are on hydroxyurea.
-
-Every output is reported as P10 / P50 / P90.
-
-## Limits
-
-- This is an aggregate planning tool, not a medical device, and gives no clinical advice.
-- REACH trial rates come from a clinic-based cohort and may not generalise to all settings.
-- Several parameters (units per event, donor deferral rate, diagnosis share, hydroxyurea
-  uptake, target coverage) have no cited source and are ASSUMPTIONS — adjustable via
-  sliders in the UI.
-- Donations must be voluntary, unpaid, and go through a licensed national blood service.
+Donations must be voluntary, unpaid, and go through a licensed national blood service.
+This is an aggregate planning tool, not a medical device, and gives no clinical advice.
 
 ## Hotspots page (`backend/app/hotspots.py`, reads `data/processed/heatmap.json`)
 
@@ -163,7 +111,7 @@ MODELLED stock levels, not live blood-bank figures. One row per country in
    existing age bands; GBD 20+ uses the adult dose). Added to step 3; because step 3 is
    calibrated with SCD use taken out, the two do not double count.
 5. Demand per group = total demand × donor share × pull weight (O- 2.2, AB 0.6-0.7, see
-   `model.py`), renormalised.
+   `DEFAULT_DEMAND_WEIGHTS` in `reservoir.py`), renormalised.
 6. Days of stock per group = target × min(usable ÷ demand, 1). ASSUMPTION: a service that
    collects x% of what it uses can hold x% of its target buffer. Status: ok at the target,
    low from 60% of it (SANBS: under 3 of 5 days is critical), critical below.
@@ -268,3 +216,66 @@ Caveats: the global blood-group distribution gives more AB+, A- and B- patients 
 African donor mixes, which pushes those groups toward shortage; everyone in crisis needs
 one episode's worth of blood; O− is the only substitute modelled (not full ABO/Rh
 compatibility). All MODELLED, not live stock.
+
+## Drive plan (`backend/app/plan.py`, `GET /api/plan`)
+
+Adds no new demand model: it composes `reservoir.compute_reservoir` (days of stock and the
+everyday gap per blood group) and `crisis.simulate_crisis` (which groups run short if N people
+with SCD go into crisis within a time window; a fixed seed so a shared link rebuilds the same
+plan). A group is **push** if its everyday stock is critical or the crisis test says it is
+lacking, **watch** if low or at risk, otherwise **ok**.
+
+- **Regular donors** = the SCD patients' red-cell units a year (from `scd_demand_per_day`) ×
+  the chosen *coverage* ÷ (donations per donor per year × (1 − deferral)).
+- **One-off donors** (for the crisis window) = units short × coverage ÷ (1 − deferral).
+- The country's whole everyday shortfall is shown as context only: closing a national shortage
+  is not what one charity's drive can do, so it is not the target.
+- Constants are multiplied through, so P10/P50/P90 scale exactly. Totals add the push/watch
+  groups' percentiles, a wide range that assumes all groups move together.
+
+ASSUMPTIONS (user-adjustable): volunteers turned away at screening 20% (range 5–50%; blood-service
+reports typically give 10–35%); donations per regular donor per year 2 (range 1–4; services allow
+3–4, many African repeat donors give 1–2); coverage 10% (the share of the SCD blood need the
+drive aims to supply); share of people with SCD in regular care 30%. Verify these with the
+national blood service.
+
+### How far to trust this (`GET /api/backtest`, `GET /api/sensitivity`)
+
+- **Back-test** (`backtest.py`): the same log-linear 10-year trend the heat map uses is fitted
+  to `data/raw.csv` using only years up to 2018, predicts 2019–2023, and is compared with the
+  GBD figures (countries with fewer than 1,000 cases left out). Typical error: about 1% a year
+  ahead and 3% five years ahead; 87% of countries within 10% at five years; Sudan is the clear
+  outlier (about 50%). Honest limit: GBD series are themselves modelled and smooth, so this checks
+  the trend method, not counted patients.
+- **Sensitivity** (`plan.sensitivity`): each assumption is varied alone across a plausible range
+  (deferral 10–35%, donations per donor 1–3 a year, share in care 15–50%) and the regular-donor
+  total re-computed. Donations per donor per year moves the answer most in the countries
+  checked.
+
+## Appeal writer (`backend/app/appeal.py`, `POST /api/appeal`)
+
+Gemini turns the plan's numbers into a donor email, social post, SMS or poster, in one of six
+languages. Gemini is a communication layer, not a source of facts:
+
+- The prompt is built from the plan the server recomputes, never from browser-sent numbers; the
+  user's venue/date/contact text is cleaned to one short line and marked as data.
+- The reply must mention that donation is voluntary/unpaid and may not contain a number with
+  three or more digits that was not given to it; otherwise a fixed English template is returned
+  (`fallback_reason`: `no_api_key`, `gemini_unavailable` or `failed_checks`).
+- Non-English output is machine-written and flagged for a native speaker to check.
+- Nothing is sent and no donor details are stored.
+
+## Travel checklist (`backend/app/briefing.py`, `POST /api/briefing`)
+
+A starter list for a visiting charity team. It is written by Gemini without live sources (or a
+fixed list when Gemini is unavailable) and says so; each item has a confidence and who to verify
+with, and official government travel advice is linked first. Country and month are validated
+against known values before they reach the prompt.
+
+## Saved plans and sign-in (`backend/app/auth.py`, `plans_store.py`)
+
+Auth0 provides the login. The server verifies the access token (RS256 signature against the
+tenant's public keys, issuer, audience, expiry) and uses its `sub` as the user id; every query is
+scoped by it in SQL. A saved plan stores only the plan's settings (an allow-listed query string),
+which the server turns back into a plan, so it cannot go stale or be forged into other numbers.
+Without Auth0 configured, saved plans stay in the browser and the protected endpoints answer 503.

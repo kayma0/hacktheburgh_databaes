@@ -4,54 +4,7 @@ export interface Percentiles {
   p90: number;
 }
 
-export interface ScenarioResult {
-  demand_units: Percentiles;
-  donors_needed: Percentiles;
-  demand_pct_of_collections: Percentiles;
-}
-
 export type StockStatus = "ok" | "low" | "critical";
-
-export interface BloodTypeStock {
-  blood_type: string;
-  supply_share: number;
-  demand_share: number;
-  units_on_hand: number;
-  target_units: number;
-  units_after_crisis: Percentiles;
-  days_of_cover: Percentiles;
-  crisis_units: Percentiles;
-  shortfall_units: Percentiles;
-  donors_to_target: Percentiles;
-  status: StockStatus;
-}
-
-export interface SimulateResponse {
-  country: string;
-  is_sample_data: boolean;
-  affected_children: Percentiles;
-  collections_per_day: number;
-  target_stock_days: number;
-  stock: BloodTypeStock[];
-  crisis_units_total: Percentiles;
-  crisis_units_by_age: Record<string, Percentiles>;
-  baseline: ScenarioResult;
-  universal_diagnosis_hydroxyurea: ScenarioResult;
-  units_avoided: Percentiles;
-}
-
-export interface SimulateRequest {
-  country: string;
-  units_per_event: number;
-  donor_deferral_rate: number;
-  share_diagnosed: number;
-  share_on_hydroxyurea: number;
-  target_coverage: number;
-  crisis_patients?: number;
-  stock_days_on_hand: number;
-  /** Keys: under_5, age_5_14, age_15_24, age_25_plus */
-  crisis_by_age?: Record<string, number>;
-}
 
 export interface HeatBucket {
   label: string;
@@ -277,6 +230,188 @@ export async function getReservoir(
   return res.json();
 }
 
+/* ── drive plan ── */
+
+export interface PlanGroup {
+  blood_group: string;
+  /** push = push for this group; watch = keep an eye on it; ok = no action. */
+  action: "push" | "watch" | "ok";
+  status: StockStatus;
+  days: Percentiles;
+  fill: number;
+  /** Share of crisis simulations in which this group ran short. */
+  p_short: number;
+  runs_dry_after_days: number | null;
+  units_short: Percentiles;
+  scd_units_per_year: Percentiles;
+  /** The whole country's everyday shortfall for this group (context, not the target). */
+  extra_donations_per_year: Percentiles;
+  /** Regular donors to supply the chosen share of the SCD patients' everyday need. */
+  donors_ongoing: Percentiles;
+  /** One-off donors for the crisis window. */
+  donors_surge: Percentiles;
+}
+
+export interface PlanAssumption {
+  key: string;
+  label: string;
+  value: number | null;
+  is_assumption: boolean;
+  source: string;
+}
+
+export interface PlanParams {
+  share_in_care: number;
+  people: number;
+  days: number;
+  seed: number;
+  deferral: number;
+  donations_per_donor: number;
+  coverage: number;
+  o_neg_fallback: boolean;
+  crisis_first: boolean;
+}
+
+export interface PlanResponse {
+  country: string;
+  projection_year: number;
+  params: PlanParams;
+  verdict: "enough" | "at_risk" | "not_enough";
+  p_all_served: number;
+  patients_unserved: Percentiles;
+  units_needed: Percentiles;
+  target_days: number;
+  scd_patients: number;
+  push: string[];
+  watch: string[];
+  groups: PlanGroup[];
+  totals: { donors_ongoing: Percentiles; donors_surge: Percentiles };
+  assumptions: PlanAssumption[];
+  ask: string;
+  disclaimer: string;
+}
+
+export interface PlanInputs {
+  country: string;
+  people: number;
+  days: number;
+  deferral: number;
+  donationsPerDonor: number;
+  coverage: number;
+  oNegFallback: boolean;
+  crisisFirst: boolean;
+}
+
+export async function getPlan(i: PlanInputs): Promise<PlanResponse> {
+  const q = new URLSearchParams({
+    country: i.country,
+    people: String(i.people),
+    days: String(i.days),
+    deferral: String(i.deferral),
+    donations_per_donor: String(i.donationsPerDonor),
+    coverage: String(i.coverage),
+    o_neg_fallback: String(i.oNegFallback),
+    crisis_first: String(i.crisisFirst),
+  });
+  const res = await fetch(`/api/plan?${q}`);
+  if (!res.ok) throw new Error(`/api/plan failed: ${res.status}`);
+  return res.json();
+}
+
+/* ── appeal writer ── */
+
+export type AppealChannel = "social" | "email" | "sms" | "poster";
+export type AppealTone = "warm" | "urgent" | "formal";
+export type AppealLanguage = "English" | "French" | "Portuguese" | "Swahili" | "Arabic" | "Hausa";
+
+export interface AppealResponse {
+  text: string;
+  channel: AppealChannel;
+  tone: AppealTone;
+  language: AppealLanguage;
+  source: "gemini" | "template";
+  /** Set when source is "template": no_api_key | gemini_unavailable | failed_checks. */
+  fallback_reason: string | null;
+  note: string | null;
+  facts_used: { groups: string[]; regular: string | null; oneoff: string | null };
+}
+
+export interface AppealInputs extends PlanInputs {
+  channel: AppealChannel;
+  tone: AppealTone;
+  language: AppealLanguage;
+  details: { organisation: string; date: string; venue: string; contact: string };
+}
+
+export function writeAppeal(i: AppealInputs): Promise<AppealResponse> {
+  return postJson("/api/appeal", {
+    country: i.country,
+    channel: i.channel,
+    tone: i.tone,
+    language: i.language,
+    details: i.details,
+    people: i.people,
+    days: i.days,
+    deferral: i.deferral,
+    donations_per_donor: i.donationsPerDonor,
+    coverage: i.coverage,
+    o_neg_fallback: i.oNegFallback,
+    crisis_first: i.crisisFirst,
+  });
+}
+
+/* ── how far to trust this ── */
+
+export interface BacktestResponse {
+  train_end: number;
+  fit_years: number;
+  min_cases: number;
+  by_horizon: {
+    years_ahead: number;
+    year: number;
+    countries: number;
+    median_error: number;
+    p90_error: number;
+    share_within_10pct: number;
+  }[];
+  worst_at_longest: { country: string; error: number }[];
+}
+
+export interface SensitivityResponse {
+  country: string;
+  base_donors: number;
+  rows: {
+    key: string;
+    label: string;
+    as_percent: boolean;
+    low_value: number;
+    high_value: number;
+    low_donors: number;
+    high_donors: number;
+    swing: number;
+  }[];
+}
+
+export async function getBacktest(): Promise<BacktestResponse> {
+  const res = await fetch("/api/backtest");
+  if (!res.ok) throw new Error(`/api/backtest failed: ${res.status}`);
+  return res.json();
+}
+
+export async function getSensitivity(i: PlanInputs): Promise<SensitivityResponse> {
+  const q = new URLSearchParams({
+    country: i.country,
+    people: String(i.people),
+    days: String(i.days),
+    deferral: String(i.deferral),
+    donations_per_donor: String(i.donationsPerDonor),
+    coverage: String(i.coverage),
+  });
+  const res = await fetch(`/api/sensitivity?${q}`);
+  if (!res.ok) throw new Error(`/api/sensitivity failed: ${res.status}`);
+  return res.json();
+}
+
 export interface BriefingItem {
   text: string;
   confidence: string;
@@ -297,13 +432,6 @@ export interface BriefingResponse {
   fallback_used: boolean;
 }
 
-export interface ChatMessage {
-  role: "user" | "assistant";
-  text: string;
-  sources?: string[];
-  offline?: boolean;
-}
-
 async function postJson<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(path, {
     method: "POST",
@@ -314,19 +442,10 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
   return res.json();
 }
 
-export async function getHealth(): Promise<{ is_sample_data: boolean }> {
-  const res = await fetch("/api/health");
-  return res.json();
-}
-
 export async function getCountries(): Promise<string[]> {
   const res = await fetch("/api/countries");
   const data = await res.json();
   return data.countries;
-}
-
-export function simulate(req: SimulateRequest): Promise<SimulateResponse> {
-  return postJson("/api/simulate", req);
 }
 
 export async function getHotspots(): Promise<HotspotsResponse> {
@@ -340,24 +459,4 @@ export function getBriefing(
   month: string,
 ): Promise<BriefingResponse> {
   return postJson("/api/briefing", { country, month });
-}
-
-/**
- * Field-briefing assistant. BACKEND TODO (teammate): implement
- * POST /api/assistant  { country, month, question, history: ChatMessage[] }
- *   -> { answer: string, sources?: string[] }
- * Until it exists, the UI shows an "assistant offline" reply.
- */
-export function askAssistant(
-  country: string,
-  month: string,
-  question: string,
-  history: ChatMessage[],
-): Promise<{ answer: string; sources?: string[] }> {
-  return postJson("/api/assistant", {
-    country,
-    month,
-    question,
-    history: history.map(({ role, text }) => ({ role, text })),
-  });
 }

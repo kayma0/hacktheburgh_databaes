@@ -9,3 +9,5 @@ backend/static/
 .DS_Store
 *.db
 .pytest_cache/
+.env.local
+.env.*.local

@@ -1,66 +1,16 @@
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
 CrisisCount = Annotated[int, Field(ge=0, le=5_000_000)]
 
 
-class SimulateRequest(BaseModel):
-    country: str
-    units_per_event: float = Field(2.0, ge=0.5, le=10)
-    donor_deferral_rate: float = Field(0.20, ge=0, le=0.9)
-    share_diagnosed: float = Field(0.20, ge=0, le=1)
-    share_on_hydroxyurea: float = Field(0.15, ge=0, le=1)
-    target_coverage: float = Field(0.50, ge=0, le=1)
-    # Stress test: patients in acute crisis needing transfusion in the same window.
-    crisis_patients: int = Field(0, ge=0, le=5_000_000)
-    # ASSUMPTION slider: red cells held, in days of national collections.
-    stock_days_on_hand: float = Field(5.0, ge=0, le=60)
-    # Patients in crisis by age band: under_5, age_5_14, age_15_24, age_25_plus.
-    # When given, it replaces crisis_patients x units_per_event for the stock test.
-    crisis_by_age: dict[str, CrisisCount] | None = None
-
-
 class Percentiles(BaseModel):
     p10: float
     p50: float
     p90: float
-
-
-class ScenarioResult(BaseModel):
-    demand_units: Percentiles
-    donors_needed: Percentiles
-    demand_pct_of_collections: Percentiles
-
-
-class BloodTypeStock(BaseModel):
-    blood_type: str
-    supply_share: float
-    demand_share: float
-    units_on_hand: float
-    target_units: float
-    units_after_crisis: Percentiles
-    days_of_cover: Percentiles
-    crisis_units: Percentiles
-    shortfall_units: Percentiles
-    donors_to_target: Percentiles
-    status: str = Field(description="ok | low | critical")
-
-
-class SimulateResponse(BaseModel):
-    country: str
-    is_sample_data: bool
-    affected_children: Percentiles
-    collections_per_day: float
-    target_stock_days: float
-    stock: list[BloodTypeStock]
-    crisis_units_total: Percentiles
-    crisis_units_by_age: dict[str, Percentiles] = {}
-    baseline: ScenarioResult
-    universal_diagnosis_hydroxyurea: ScenarioResult
-    units_avoided: Percentiles
 
 
 class HeatBucket(BaseModel):
@@ -230,6 +180,161 @@ class CrisisResponse(BaseModel):
     o_neg_patients_helped: float = Field(description="Mean number of such patients per simulation")
     routine_displaced_units: Percentiles = Field(
         description="Units crisis patients took from other hospital patients (crisis-first on)")
+
+
+class PlanGroup(BaseModel):
+    blood_group: str
+    action: str = Field(description="push | watch | ok")
+    status: str = Field(description="ok | low | critical (everyday stock)")
+    days: Percentiles
+    fill: float
+    p_short: float = Field(description="Share of crisis simulations where this group ran short")
+    runs_dry_after_days: float | None = None
+    units_short: Percentiles
+    scd_units_per_year: Percentiles = Field(description="Red-cell units a year for people with SCD in care")
+    extra_donations_per_year: Percentiles = Field(
+        description="The whole country's everyday shortfall for this group (context, not the target)")
+    donors_ongoing: Percentiles = Field(description="Regular donors to supply the chosen share of SCD need")
+    donors_surge: Percentiles = Field(description="One-off donors for the crisis window")
+
+
+class PlanTotals(BaseModel):
+    donors_ongoing: Percentiles
+    donors_surge: Percentiles
+
+
+class PlanParams(BaseModel):
+    share_in_care: float
+    people: int
+    days: int
+    seed: int
+    deferral: float
+    donations_per_donor: float
+    coverage: float
+    o_neg_fallback: bool
+    crisis_first: bool
+
+
+class PlanAssumption(BaseModel):
+    key: str
+    label: str
+    value: float | None = None
+    is_assumption: bool
+    source: str
+
+
+class PlanResponse(BaseModel):
+    country: str
+    projection_year: int
+    params: PlanParams
+    verdict: str = Field(description="enough | at_risk | not_enough (crisis test)")
+    p_all_served: float
+    patients_unserved: Percentiles
+    units_needed: Percentiles
+    target_days: float
+    scd_patients: float
+    push: list[str]
+    watch: list[str]
+    groups: list[PlanGroup]
+    totals: PlanTotals
+    assumptions: list[PlanAssumption]
+    ask: str
+    disclaimer: str
+
+
+class AppealDetails(BaseModel):
+    organisation: str = Field("", max_length=80)
+    date: str = Field("", max_length=80)
+    venue: str = Field("", max_length=120)
+    contact: str = Field("", max_length=120)
+
+
+class AppealRequest(BaseModel):
+    country: str
+    channel: Literal["social", "email", "sms", "poster"] = "social"
+    tone: Literal["warm", "urgent", "formal"] = "warm"
+    language: Literal["English", "French", "Portuguese", "Swahili", "Arabic", "Hausa"] = "English"
+    details: AppealDetails = AppealDetails()
+    # The plan the appeal is written from. The server recomputes it; numbers are never taken
+    # from the browser.
+    people: int = Field(25, ge=1, le=50)
+    days: int = Field(30, ge=1, le=365)
+    deferral: float = Field(0.20, ge=0.05, le=0.5)
+    donations_per_donor: float = Field(2.0, ge=1, le=4)
+    coverage: float = Field(0.10, ge=0, le=1)
+    o_neg_fallback: bool = False
+    crisis_first: bool = False
+
+
+class AppealFacts(BaseModel):
+    groups: list[str]
+    regular: str | None = None
+    oneoff: str | None = None
+
+
+class AppealResponse(BaseModel):
+    text: str
+    channel: str
+    tone: str
+    language: str
+    source: Literal["gemini", "template"]
+    fallback_reason: str | None = Field(
+        None, description="no_api_key | gemini_unavailable | failed_checks when source is template")
+    note: str | None = None
+    facts_used: AppealFacts
+
+
+class BacktestHorizon(BaseModel):
+    years_ahead: int
+    year: int
+    countries: int
+    median_error: float
+    p90_error: float
+    share_within_10pct: float
+
+
+class BacktestWorst(BaseModel):
+    country: str
+    error: float
+
+
+class BacktestResponse(BaseModel):
+    train_end: int
+    fit_years: int
+    min_cases: int
+    by_horizon: list[BacktestHorizon]
+    worst_at_longest: list[BacktestWorst]
+
+
+class SensitivityRow(BaseModel):
+    key: str
+    label: str
+    as_percent: bool
+    low_value: float
+    high_value: float
+    low_donors: float
+    high_donors: float
+    swing: float
+
+
+class SensitivityResponse(BaseModel):
+    country: str
+    base_donors: float
+    rows: list[SensitivityRow]
+
+
+class SavedPlanIn(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    country: str
+    query: str = Field(max_length=400, description="The plan page's settings, as in the URL")
+
+
+class SavedPlan(BaseModel):
+    id: int
+    name: str
+    country: str
+    query: str
+    created_at: str
 
 
 class BriefingRequest(BaseModel):

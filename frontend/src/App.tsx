@@ -1,5 +1,8 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import africaGeo from "./africaGeo.json";
+import { AuthControls, useAuth } from "./auth";
+import { deleteSavedPlan, listSavedPlans, savePlan } from "./savedPlans";
+import type { SavedPlanItem } from "./savedPlans";
 import type {
   CSSProperties,
   KeyboardEvent,
@@ -8,26 +11,32 @@ import type {
   ReactNode,
 } from "react";
 import {
-  askAssistant,
   getBriefing,
   getCountries,
   getCrisis,
-  getHealth,
   getHotspots,
+  getBacktest,
+  getPlan,
+  getSensitivity,
+  writeAppeal,
   getReservoir,
-  simulate,
 } from "./api";
 import type {
-  BloodTypeStock,
   BriefingResponse,
   CrisisResponse,
-  ChatMessage,
   HotspotItem,
   HotspotsResponse,
+  AppealChannel,
+  AppealLanguage,
+  AppealResponse,
+  AppealTone,
+  BacktestResponse,
+  SensitivityResponse,
+  PlanInputs,
+  PlanResponse,
   Percentiles,
   ReservoirResponse,
   StockStatus,
-  SimulateResponse,
 } from "./api";
 
 /* ───────────────────────── helpers ───────────────────────── */
@@ -47,11 +56,10 @@ const MONTHS = [
   "December",
 ];
 
-// The app is the hotspots map plus the blood reservoir page. StockPage and BriefingPage
-// below are kept but not routed (the stock model's data/raw/ files are missing).
-// Pages are reached through the buttons on each page (map -> reservoir -> back), not a nav bar.
-type Page = "hotspots" | "reservoir";
-const ALL_PAGES: Page[] = ["hotspots", "reservoir"];
+// Flow: map -> reservoir (+ crisis test) -> drive plan (+ appeal) -> before you travel.
+// Pages are reached through the buttons on each page, not a nav bar.
+type Page = "hotspots" | "reservoir" | "plan" | "briefing";
+const ALL_PAGES: Page[] = ["hotspots", "reservoir", "plan", "briefing"];
 
 const fmt = (n: number) => Math.round(n).toLocaleString("en-GB");
 const pct = (v: number) => `${Math.round(v * 100)}%`;
@@ -66,7 +74,7 @@ const niceCeil = (x: number) => {
 };
 
 function readPage(): Page {
-  const h = window.location.hash.replace("#/", "");
+  const h = window.location.hash.replace("#/", "").split("?")[0];
   return ALL_PAGES.includes(h as Page) ? (h as Page) : "hotspots";
 }
 
@@ -74,10 +82,11 @@ function readPage(): Page {
 
 export default function App() {
   const [page, setPage] = useState<Page>(readPage);
+  // Bumped to rebuild the plan page when a saved plan is opened from inside it.
+  const [planKey, setPlanKey] = useState(0);
   const [countries, setCountries] = useState<string[]>([]);
   const [country, setCountryState] = useState("");
   const setCountry = (c: string) => setCountryState(c);
-  const [isSample, setIsSample] = useState(false);
 
   useEffect(() => {
     const on = () => setPage(readPage());
@@ -93,13 +102,10 @@ export default function App() {
           setCountryState((c) => (c && list.includes(c) ? c : list[0]));
       })
       .catch(() => setCountries([]));
-    getHealth()
-      .then((h) => setIsSample(h.is_sample_data))
-      .catch(() => undefined);
   }, []);
 
-  const go = (p: Page) => {
-    window.location.hash = `#/${p}`;
+  const go = (p: Page, query = "") => {
+    window.location.hash = `#/${p}${query ? `?${query}` : ""}`;
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -113,7 +119,7 @@ export default function App() {
               <em>Sickle</em>Signal
             </span>
           </a>
-          {isSample && <span className="stamp">Sample data</span>}
+          <AuthControls />
         </div>
       </header>
 
@@ -132,7 +138,48 @@ export default function App() {
           />
         )}
         {page === "reservoir" && (
-          <ReservoirPage country={country} onBack={() => go("hotspots")} />
+          <ReservoirPage
+            country={country}
+            onBack={() => go("hotspots")}
+            onPlan={(s) =>
+              go(
+                "plan",
+                planQueryString({
+                  country,
+                  people: s.people,
+                  days: s.days,
+                  deferral: PLAN_DEFAULTS.deferral,
+                  donationsPerDonor: PLAN_DEFAULTS.donationsPerDonor,
+                  coverage: PLAN_DEFAULTS.coverage,
+                  oNegFallback: s.oNegFallback,
+                  crisisFirst: s.crisisFirst,
+                }),
+              )
+            }
+          />
+        )}
+        {page === "plan" && (
+          <PlanPage
+            key={planKey}
+            country={country}
+            onCountry={setCountry}
+            onBack={() => go("reservoir")}
+            onTravel={(c) => go("briefing", `c=${encodeURIComponent(c)}`)}
+            onOpenSaved={(q) => {
+              window.history.replaceState(null, "", `#/plan?${q}`);
+              setPlanKey((k) => k + 1);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+          />
+        )}
+        {page === "briefing" && (
+          <TravelBriefPage
+            country={country}
+            onCountry={setCountry}
+            onBack={() =>
+              window.history.length > 1 ? window.history.back() : go("reservoir")
+            }
+          />
         )}
       </main>
 
@@ -156,400 +203,6 @@ function BrandMark() {
       <path d="M588 377L430 650A183 183 0 1 0 746 650Z" fill="#D81F3A" />
     </svg>
   );
-}
-
-/* ───────────────────────── page 01: stock ───────────────────────── */
-
-const AGE_BANDS = [
-  {
-    id: "under_5",
-    label: "Under 5",
-    note: "≈0.6 unit each, dosed by weight",
-    color: "#FA8072",
-  },
-  {
-    id: "age_5_14",
-    label: "5–14 years",
-    note: "≈1.3 units each",
-    color: "#E9967A",
-  },
-  {
-    id: "age_15_24",
-    label: "15–24 years",
-    note: "≈2.2 units each",
-    color: "#CD5C5C",
-  },
-  {
-    id: "age_25_plus",
-    label: "25 and over",
-    note: "≈2.5 units each",
-    color: "#8B0000",
-  },
-] as const;
-type AgeBand = (typeof AGE_BANDS)[number]["id"];
-
-function StockPage({
-  countries,
-  country,
-  setCountry,
-}: {
-  countries: string[];
-  country: string;
-  setCountry: (c: string) => void;
-}) {
-  const [crisisByAge, setCrisisByAge] = useState<Record<AgeBand, number>>({
-    under_5: 90,
-    age_5_14: 120,
-    age_15_24: 35,
-    age_25_plus: 10,
-  });
-  const crisisPatients = Object.values(crisisByAge).reduce((a, b) => a + b, 0);
-  const [stockDays, setStockDays] = useState(5);
-  const [unitsPerEvent, setUnitsPerEvent] = useState(2.0);
-  const [deferral, setDeferral] = useState(0.2);
-  const [shareDiagnosed, setShareDiagnosed] = useState(0.2);
-  const [shareHU, setShareHU] = useState(0.15);
-  const [coverage, setCoverage] = useState(0.5);
-
-  const [result, setResult] = useState<SimulateResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!country) return;
-    let cancelled = false;
-    setLoading(true);
-    const t = window.setTimeout(() => {
-      simulate({
-        country,
-        crisis_by_age: crisisByAge,
-        stock_days_on_hand: stockDays,
-        units_per_event: unitsPerEvent,
-        donor_deferral_rate: deferral,
-        share_diagnosed: shareDiagnosed,
-        share_on_hydroxyurea: shareHU,
-        target_coverage: coverage,
-      })
-        .then((r) => {
-          if (cancelled) return;
-          setResult(r);
-          setError(null);
-        })
-        .catch((e) => !cancelled && setError(String(e)))
-        .finally(() => !cancelled && setLoading(false));
-    }, 200);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(t);
-    };
-  }, [
-    country,
-    crisisByAge,
-    stockDays,
-    unitsPerEvent,
-    deferral,
-    shareDiagnosed,
-    shareHU,
-    coverage,
-  ]);
-
-  const today = new Date().toLocaleDateString("en-GB", {
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-  });
-
-  const crisisMax = result
-    ? Math.max(
-        100,
-        niceCeil(result.affected_children.p50 * Math.max(shareDiagnosed, 0.05)),
-      )
-    : 1000;
-  useEffect(() => {
-    if (Object.values(crisisByAge).some((v) => v > crisisMax)) {
-      setCrisisByAge((prev) => {
-        const next = { ...prev };
-        (Object.keys(next) as AgeBand[]).forEach(
-          (k) => (next[k] = Math.min(next[k], crisisMax)),
-        );
-        return next;
-      });
-    }
-  }, [crisisMax, crisisByAge]);
-  const totalTargetUnits = (result?.stock ?? []).reduce(
-    (a, s) => a + s.target_units,
-    0,
-  );
-
-  const target = result?.target_stock_days ?? 6;
-  const bagMax = target * 1.5;
-
-  const needs = (result?.stock ?? [])
-    .filter((s) => s.shortfall_units.p50 > 0.5)
-    .sort((a, b) => b.shortfall_units.p50 - a.shortfall_units.p50);
-
-  return (
-    <>
-      <section className="hero">
-        <p className="eyebrow">
-          Modelled red-cell stock outlook <span className="dot-sep">·</span>
-          <span className={`live ${loading ? "is-busy" : ""}`}>
-            {loading ? "re-running 10,000 draws" : "10,000 draws"}
-          </span>
-        </p>
-        <h1 className="hero-date">{today}</h1>
-        <div className="hero-place">
-          Blood stock across
-          <span className="select-wrap">
-            <select
-              value={country}
-              onChange={(e) => setCountry(e.target.value)}
-            >
-              {countries.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </span>
-        </div>
-        <p className="hero-sub">
-          Days of cover left in each blood group after{" "}
-          <b>{fmt(crisisPatients)}</b> people with sickle cell disease go into
-          crisis at once
-          {result && (
-            <>
-              {" "}
-              and need <b>~{fmt(result.crisis_units_total.p50)}</b> units
-              between them
-            </>
-          )}
-          . The big number is the median; the small one is the P10–P90 range.
-        </p>
-      </section>
-
-      {error && <div className="alert">Simulation failed: {error}</div>}
-
-      <section
-        className={`bags ${loading ? "is-busy" : ""}`}
-        aria-label="Blood stock by group"
-      >
-        {(result?.stock ?? placeholderStock()).map((s) => (
-          <BloodBag
-            key={s.blood_type}
-            type={s.blood_type}
-            days={s.days_of_cover}
-            status={s.status}
-            target={target}
-            max={bagMax}
-            ghost={!result}
-            caption={
-              <span className="bag-units">
-                <b>{fmt(s.units_after_crisis.p50)}</b> / {fmt(s.target_units)}{" "}
-                units
-              </span>
-            }
-          />
-        ))}
-      </section>
-
-      <p className="target-note">
-        We aim to retain <b>{target} days</b> of stock at any time
-        {result && (
-          <>
-            , about <b>{fmt(totalTargetUnits)} units</b> across all groups,
-          </>
-        )}{" "}
-        to meet the needs of patients in {country || "this country"}. The dashed
-        line on each bag marks it.
-        {result && (
-          <span className="target-sub">
-            ≈{fmt(result.collections_per_day)} units collected a day nationally
-            (modelled)
-          </span>
-        )}
-      </p>
-
-      <div className="split">
-        <section className="panel">
-          <header className="panel-head">
-            <span className="panel-key">A</span>
-            <h2>Stress test</h2>
-            <p>Change the situation and watch the bags drain.</p>
-          </header>
-          <div className="age-head">
-            <span>People in crisis at the same time, by age</span>
-            <b>{fmt(crisisPatients)} total</b>
-          </div>
-          <p className="dial-hint age-why">
-            e.g. a malaria season or heatwave triggering acute chest syndrome or
-            severe anaemia. Children are transfused by body weight, so age
-            changes how much blood each crisis uses.
-          </p>
-          {AGE_BANDS.map((b) => (
-            <Dial
-              key={b.id}
-              label={b.label}
-              value={Math.min(crisisByAge[b.id], crisisMax)}
-              min={0}
-              max={crisisMax}
-              step={Math.max(1, Math.round(crisisMax / 200))}
-              format={fmt}
-              hint={b.note}
-              swatch={b.color}
-              onChange={(v) =>
-                setCrisisByAge((prev) => ({ ...prev, [b.id]: v }))
-              }
-            />
-          ))}
-          {result && <AgeMix r={result} />}
-          <Dial
-            label="Stock on hand before the surge"
-            value={stockDays}
-            min={0}
-            max={12}
-            step={0.5}
-            format={(v) => `${v.toFixed(1)} days`}
-            hint="Assumption: days of national collections sitting in fridges"
-            onChange={setStockDays}
-          />
-          <Dial
-            label="Donor deferral rate"
-            value={deferral}
-            min={0}
-            max={0.5}
-            step={0.01}
-            format={pct}
-            hint="Share of volunteers turned away (low Hb, malaria, infection)"
-            onChange={setDeferral}
-          />
-        </section>
-
-        <section className="panel panel-ink">
-          <header className="panel-head">
-            <span className="panel-key">B</span>
-            <h2>Push for these groups</h2>
-            <p>
-              Units needed to climb back to the {target}-day target, ranked.
-            </p>
-          </header>
-          {!result ? (
-            <p className="muted">Waiting for the model…</p>
-          ) : needs.length === 0 ? (
-            <p className="all-clear">
-              Every group holds {target}+ days under this scenario. No targeted
-              appeal needed.
-            </p>
-          ) : (
-            <ol className="needs">
-              {needs.map((s, i) => (
-                <li key={s.blood_type} className={`need need-${s.status}`}>
-                  <span className="need-rank">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <span className="need-type">{s.blood_type}</span>
-                  <span className="need-body">
-                    <b>{fmt(s.shortfall_units.p50)}</b> units short
-                    <small>
-                      {fmt(s.shortfall_units.p10)}–{fmt(s.shortfall_units.p90)}{" "}
-                      · ≈ {fmt(s.donors_to_target.p50)} donors to recruit
-                    </small>
-                  </span>
-                  <span className={`chip chip-${s.status}`}>{s.status}</span>
-                </li>
-              ))}
-            </ol>
-          )}
-          <p className="fine">
-            Children with SCD who are transfused often need units matched for
-            extra antigens (Rh C/E, Kell). Ask the national blood service
-            whether it phenotypes donors before running an appeal for one group.
-          </p>
-        </section>
-      </div>
-
-      <section className="panel ledger">
-        <header className="panel-head">
-          <span className="panel-key">C</span>
-          <h2>Annual demand ledger</h2>
-          <p>
-            Yearly red-cell demand from SCD today versus a future where every
-            affected child is diagnosed and a share take hydroxyurea.
-          </p>
-        </header>
-        <div className="ledger-grid">
-          <div className="ledger-dials">
-            <Dial
-              label="Units per transfusion event"
-              value={unitsPerEvent}
-              min={1}
-              max={4}
-              step={0.1}
-              format={(v) => v.toFixed(1)}
-              onChange={setUnitsPerEvent}
-            />
-            <Dial
-              label="Share diagnosed today"
-              value={shareDiagnosed}
-              min={0}
-              max={1}
-              step={0.01}
-              format={pct}
-              onChange={setShareDiagnosed}
-            />
-            <Dial
-              label="Share on hydroxyurea (scenario)"
-              value={shareHU}
-              min={0}
-              max={1}
-              step={0.01}
-              format={pct}
-              onChange={setShareHU}
-            />
-            <Dial
-              label="Target coverage of demand"
-              value={coverage}
-              min={0}
-              max={1}
-              step={0.01}
-              format={pct}
-              onChange={setCoverage}
-            />
-          </div>
-          {result && <Ledger r={result} />}
-        </div>
-      </section>
-
-      <section className="assume">
-        <h3>What's modelled and what's assumed</h3>
-        <p>
-          Affected children, crisis transfusions, stock and donor needs are{" "}
-          <b>modelled</b>, not observed, and these aren't live blood-bank
-          figures. Blood-group mix (sub-Saharan default), extra pull on O− as
-          the emergency group, stock on hand and day-to-day demand noise are{" "}
-          <b>assumptions</b>; you can override them in{" "}
-          <code>parameters.yaml</code>.
-        </p>
-      </section>
-    </>
-  );
-}
-
-function placeholderStock(): BloodTypeStock[] {
-  const z: Percentiles = { p10: 0, p50: 0, p90: 0 };
-  return ["O+", "A+", "B+", "AB+", "O-", "A-", "B-", "AB-"].map((t) => ({
-    blood_type: t,
-    supply_share: 0,
-    demand_share: 0,
-    units_on_hand: 0,
-    target_units: 0,
-    units_after_crisis: z,
-    days_of_cover: z,
-    crisis_units: z,
-    shortfall_units: z,
-    donors_to_target: z,
-    status: "ok",
-  }));
 }
 
 function BloodBag({
@@ -666,153 +319,6 @@ function BloodBag({
         )}
       </figcaption>
     </figure>
-  );
-}
-
-function AgeMix({ r }: { r: SimulateResponse }) {
-  const parts = AGE_BANDS.map((b) => ({
-    ...b,
-    units: r.crisis_units_by_age[b.id]?.p50 ?? 0,
-  }));
-  const total = parts.reduce((a, p) => a + p.units, 0);
-  return (
-    <div className="agemix">
-      <div className="agemix-head">
-        <span>Where the crisis units go</span>
-        <b>
-          ~{fmt(r.crisis_units_total.p50)} units
-          <small>
-            {" "}
-            ({fmt(r.crisis_units_total.p10)}–{fmt(r.crisis_units_total.p90)})
-          </small>
-        </b>
-      </div>
-      <div className="agemix-bar">
-        {total > 0 ? (
-          parts.map((p) =>
-            p.units > 0 ? (
-              <span
-                key={p.id}
-                style={{
-                  width: `${(p.units / total) * 100}%`,
-                  background: p.color,
-                }}
-                title={`${p.label}: ~${fmt(p.units)} units`}
-              />
-            ) : null,
-          )
-        ) : (
-          <em>No one in crisis</em>
-        )}
-      </div>
-      <ul className="agemix-key">
-        {parts.map((p) => (
-          <li key={p.id}>
-            <i style={{ background: p.color }} />
-            {p.label} <b>{fmt(p.units)}</b>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function Ledger({ r }: { r: SimulateResponse }) {
-  const b = r.baseline;
-  const sc = r.universal_diagnosis_hydroxyurea;
-  const unitScale = Math.max(b.demand_units.p90, sc.demand_units.p90) * 1.05;
-  const donorScale = Math.max(b.donors_needed.p90, sc.donors_needed.p90) * 1.05;
-  const pctScale =
-    Math.max(
-      b.demand_pct_of_collections.p90,
-      sc.demand_pct_of_collections.p90,
-    ) * 1.05;
-  const delta = -r.units_avoided.p50;
-
-  return (
-    <div className="ledger-rows">
-      <h4>Units / year</h4>
-      <RangeRow label="Today" p={b.demand_units} scale={unitScale} />
-      <RangeRow label="Scenario" p={sc.demand_units} scale={unitScale} accent />
-      <h4>Donors needed / year</h4>
-      <RangeRow label="Today" p={b.donors_needed} scale={donorScale} />
-      <RangeRow
-        label="Scenario"
-        p={sc.donors_needed}
-        scale={donorScale}
-        accent
-      />
-      <h4>Share of national collections</h4>
-      <RangeRow
-        label="Today"
-        p={b.demand_pct_of_collections}
-        scale={pctScale}
-        suffix="%"
-      />
-      <RangeRow
-        label="Scenario"
-        p={sc.demand_pct_of_collections}
-        scale={pctScale}
-        suffix="%"
-        accent
-      />
-      <p className="ledger-verdict">
-        {delta >= 0 ? (
-          <>
-            Diagnosing every affected child brings <b>~{fmt(delta)}</b> more
-            units a year into the system. These are children who are currently
-            undiagnosed and untreated, not avoided demand. Plan donor growth for
-            it.
-          </>
-        ) : (
-          <>
-            The scenario <b>avoids ~{fmt(-delta)}</b> units a year compared with
-            today.
-          </>
-        )}
-        <span>
-          {" "}
-          Affected children: {fmt(r.affected_children.p50)} (
-          {fmt(r.affected_children.p10)}–{fmt(r.affected_children.p90)}).
-        </span>
-      </p>
-    </div>
-  );
-}
-
-function RangeRow({
-  label,
-  p,
-  scale,
-  accent,
-  suffix = "",
-}: {
-  label: string;
-  p: Percentiles;
-  scale: number;
-  accent?: boolean;
-  suffix?: string;
-}) {
-  const x = (v: number) => clamp((v / (scale || 1)) * 100, 0, 100);
-  const show = (v: number) =>
-    (suffix ? v.toFixed(v < 10 ? 1 : 0) : fmt(v)) + suffix;
-  return (
-    <div className={`range ${accent ? "is-accent" : ""}`}>
-      <span className="range-label">{label}</span>
-      <span className="range-track">
-        <span
-          className="range-span"
-          style={{ left: `${x(p.p10)}%`, width: `${x(p.p90) - x(p.p10)}%` }}
-        />
-        <span className="range-mid" style={{ left: `${x(p.p50)}%` }} />
-      </span>
-      <span className="range-nums">
-        <b>{show(p.p50)}</b>
-        <small>
-          {show(p.p10)}–{show(p.p90)}
-        </small>
-      </span>
-    </div>
   );
 }
 
@@ -1321,13 +827,18 @@ const AGE_COLOR: Record<string, string> = {
   adults: "#6E0A12",
 };
 
+type SimSettings = { people: number; days: number; oNegFallback: boolean; crisisFirst: boolean };
+
 function ReservoirPage({
   country,
   onBack,
+  onPlan,
 }: {
   country: string;
   onBack: () => void;
+  onPlan: (s: SimSettings) => void;
 }) {
+  const [sim, setSim] = useState<SimSettings>(SIM_DEFAULTS);
   const [r, setR] = useState<ReservoirResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1424,10 +935,13 @@ function ReservoirPage({
         {r && <SourceTag assumed={r.target_is_assumption} title={r.target_source} />}
       </p>
 
-      <CrisisSimulator country={country} />
+      <CrisisSimulator country={country} onSettings={setSim} />
 
       <div className="hero-actions">
-        <button className="btn" onClick={onBack}>
+        <button className="btn" onClick={() => onPlan(sim)} disabled={!country}>
+          Plan the drive for {country || "this country"} →
+        </button>
+        <button className="btn btn-ghost" onClick={onBack}>
           ← Back to hotspots
         </button>
       </div>
@@ -1464,12 +978,22 @@ function Toggle({
   );
 }
 
-function CrisisSimulator({ country }: { country: string }) {
+function CrisisSimulator({
+  country,
+  onSettings,
+}: {
+  country: string;
+  onSettings?: (s: SimSettings) => void;
+}) {
   const [people, setPeople] = useState(SIM_DEFAULTS.people);
   const [windowPos, setWindowPos] = useState(daysToPos(SIM_DEFAULTS.days));
   const [oNegFallback, setONegFallback] = useState(SIM_DEFAULTS.oNegFallback);
   const [crisisFirst, setCrisisFirst] = useState(SIM_DEFAULTS.crisisFirst);
   const days = posToDays(windowPos);
+  // Tell the page what is set, so "Plan the drive" starts from the same crisis.
+  useEffect(() => {
+    onSettings?.({ people, days, oNegFallback, crisisFirst });
+  }, [people, days, oNegFallback, crisisFirst]); // eslint-disable-line react-hooks/exhaustive-deps
   const [res, setRes] = useState<CrisisResponse | null>(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1786,141 +1310,982 @@ function CrisisResult({ res, stale }: { res: CrisisResponse; stale: boolean }) {
   );
 }
 
-function Fact({
-  k,
-  p,
-  suffix = "",
-  big = false,
-}: {
-  k: string;
-  p: Percentiles;
-  suffix?: string;
-  big?: boolean;
-}) {
-  const show = (v: number) =>
-    big
-      ? fmtBig(v)
-      : (suffix ? v.toFixed(Math.abs(v) < 10 ? 1 : 0) : fmt(v)) + suffix;
-  return (
-    <div className="fact">
-      <dt>{k}</dt>
-      <dd>
-        <b>{show(p.p50)}</b>
-        <small>
-          {show(p.p10)}–{show(p.p90)}
-        </small>
-      </dd>
-    </div>
-  );
+/* ───────────────────────── drive plan ───────────────────────── */
+
+const PLAN_DEFAULTS = {
+  people: 25,
+  days: 30,
+  deferral: 0.2,
+  donationsPerDonor: 2,
+  coverage: 0.1,
+  oNegFallback: false,
+  crisisFirst: false,
+};
+
+/** Plan settings live in the URL, so a copied link rebuilds the same plan. */
+function planQueryString(i: PlanInputs): string {
+  return new URLSearchParams({
+    c: i.country,
+    p: String(i.people),
+    d: String(i.days),
+    df: String(i.deferral),
+    dpd: String(i.donationsPerDonor),
+    cov: String(i.coverage),
+    on: i.oNegFallback ? "1" : "0",
+    cf: i.crisisFirst ? "1" : "0",
+  }).toString();
 }
 
-/* ───────────────────────── page 03: field briefing ───────────────────────── */
+function readPlanQuery(): URLSearchParams {
+  const h = window.location.hash;
+  const i = h.indexOf("?");
+  return new URLSearchParams(i >= 0 ? h.slice(i + 1) : "");
+}
 
-function BriefingPage({
-  countries,
-  country,
-  setCountry,
-  month,
-  setMonth,
-}: {
-  countries: string[];
-  country: string;
-  setCountry: (c: string) => void;
-  month: string;
-  setMonth: (m: string) => void;
-}) {
-  const [checklist, setChecklist] = useState<BriefingResponse | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);
-  const endRef = useRef<HTMLDivElement>(null);
+function numParam(q: URLSearchParams, k: string, d: number, lo: number, hi: number) {
+  const v = parseFloat(q.get(k) ?? "");
+  return Number.isFinite(v) ? clamp(v, lo, hi) : d;
+}
 
-  useEffect(() => {
-    if (!country) return;
-    setChecklist(null);
-    getBriefing(country, month)
-      .then(setChecklist)
-      .catch(() => setChecklist(null));
-  }, [country, month]);
+const rangeText = (p: Percentiles) => `${fmt(p.p10)}–${fmt(p.p90)}`;
 
-  useEffect(() => {
-    setMessages([]);
-  }, [country]);
+function planVerdictText(plan: PlanResponse): string {
+  return plan.verdict === "enough"
+    ? `${plan.country} has enough blood`
+    : plan.verdict === "at_risk"
+      ? `${plan.country} might not have enough blood`
+      : `${plan.country} does not have enough blood`;
+}
 
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, sending]);
-
-  const suggestions = [
-    `What should our team know before travelling to ${country || "this country"} in ${month}?`,
-    "Which vaccinations and health precautions should we check?",
-    "How do we partner with the national blood service?",
-    "Are there cultural considerations around giving blood?",
-    "What should we ask local partners on day one?",
+function planSummaryText(plan: PlanResponse, link: string): string {
+  const p = plan.params;
+  const lines = [
+    `SickleSignal drive plan: ${plan.country}`,
+    `Scenario: ${p.people} people with sickle cell disease in crisis over ${fmtWindow(p.days).replace(/ \(.*\)$/, "")}; the drive aims to supply ${pct(p.coverage)} of their regular blood need.`,
+    `Crisis test: ${planVerdictText(plan)}. Everyone got blood in ${pct(plan.p_all_served)} of simulations.`,
+    plan.push.length
+      ? `Push for: ${plan.push.map(groupLabel).join(", ")}.${plan.watch.length ? ` Watch: ${plan.watch.map(groupLabel).join(", ")}.` : ""}`
+      : `No blood group needs pushing in this scenario.${plan.watch.length ? ` Watch: ${plan.watch.map(groupLabel).join(", ")}.` : ""}`,
+    `Regular donors needed: about ${fmt(plan.totals.donors_ongoing.p50)} (likely ${rangeText(plan.totals.donors_ongoing)}).`,
+    `One-off donors for the crisis window: about ${fmt(plan.totals.donors_surge.p50)} (likely ${rangeText(plan.totals.donors_surge)}).`,
+    "",
+    "By blood group (regular donors / one-off donors):",
+    ...plan.groups
+      .filter((g) => g.action !== "ok")
+      .map(
+        (g) =>
+          `  ${groupLabel(g.blood_group)} (${g.action}): ${fmt(g.donors_ongoing.p50)} regular (${rangeText(g.donors_ongoing)}), ${fmt(g.donors_surge.p50)} one-off (${rangeText(g.donors_surge)}); short in ${pct(g.p_short)} of crisis simulations`,
+      ),
+    "",
+    "Assumptions:",
+    ...plan.assumptions.map(
+      (a) => `  - ${a.label}${a.value !== null ? `: ${a.key === "deferral" || a.key === "coverage" || a.key === "share_in_care" ? pct(a.value) : fmtRate(a.value)}` : ""} (${a.is_assumption ? "assumption" : "sourced"}: ${a.source})`,
+    ),
+    "",
+    plan.ask,
+    "",
+    plan.disclaimer,
+    `Link: ${link}`,
   ];
+  return lines.join("\n");
+}
 
-  const send = (text: string) => {
-    const q = text.trim();
-    if (!q || sending || !country) return;
-    const history: ChatMessage[] = [...messages, { role: "user", text: q }];
-    setMessages(history);
-    setDraft("");
-    setSending(true);
-    askAssistant(country, month, q, messages)
-      .then((r) =>
-        setMessages([
-          ...history,
-          { role: "assistant", text: r.answer, sources: r.sources },
-        ]),
-      )
-      .catch(() =>
-        setMessages([
-          ...history,
-          {
-            role: "assistant",
-            offline: true,
-            text: "The assistant isn't connected yet; this is a UI preview. Once /api/assistant is live, answers for this trip will appear here. Meanwhile, use the checklist on the left and check your government's official travel advice.",
-          },
-        ]),
-      )
-      .finally(() => setSending(false));
+/* ───────────── appeal writer: Gemini writes from the plan's numbers ───────────── */
+
+const APPEAL_CHANNELS: { id: AppealChannel; label: string }[] = [
+  { id: "social", label: "Social post" },
+  { id: "email", label: "Email to donors" },
+  { id: "sms", label: "SMS" },
+  { id: "poster", label: "Poster" },
+];
+const APPEAL_TONES: { id: AppealTone; label: string }[] = [
+  { id: "warm", label: "Warm" },
+  { id: "urgent", label: "Urgent" },
+  { id: "formal", label: "Formal" },
+];
+const APPEAL_LANGUAGES: AppealLanguage[] = ["English", "French", "Portuguese", "Swahili", "Arabic", "Hausa"];
+
+function AppealWriter({ inputs, ready }: { inputs: PlanInputs; ready: boolean }) {
+  const [channel, setChannel] = useState<AppealChannel>("social");
+  const [tone, setTone] = useState<AppealTone>("warm");
+  const [language, setLanguage] = useState<AppealLanguage>("English");
+  const [details, setDetails] = useState({ organisation: "", date: "", venue: "", contact: "" });
+  const [res, setRes] = useState<AppealResponse | null>(null);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const write = () => {
+    setBusy(true);
+    setError(null);
+    writeAppeal({ ...inputs, channel, tone, language, details })
+      .then((r) => {
+        setRes(r);
+        setText(r.text);
+      })
+      .catch((e) => setError(String(e)))
+      .finally(() => setBusy(false));
   };
 
-  const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      send(draft);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError("Couldn't copy: select the text and copy it by hand");
     }
   };
 
+  const field = (k: keyof typeof details, label: string, ph: string) => (
+    <label className="appeal-field">
+      <span>{label}</span>
+      <input
+        type="text"
+        value={details[k]}
+        maxLength={k === "venue" || k === "contact" ? 120 : 80}
+        placeholder={ph}
+        onChange={(e) => setDetails((d) => ({ ...d, [k]: e.target.value }))}
+      />
+    </label>
+  );
+
+  return (
+    <section className="panel plan-appeal no-print">
+      <header className="panel-head">
+        <span className="panel-key">5</span>
+        <h2>Write an appeal</h2>
+        <p>
+          Words for registered donors or social media, written from this plan's numbers. Check it
+          before you post: the app never sends anything.
+        </p>
+      </header>
+
+      <div className="appeal-row" role="group" aria-label="Where it will be shared">
+        {APPEAL_CHANNELS.map((c) => (
+          <button
+            key={c.id}
+            className={`seg ${channel === c.id ? "is-on" : ""}`}
+            onClick={() => setChannel(c.id)}
+            aria-pressed={channel === c.id}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="appeal-grid">
+        <label className="appeal-field">
+          <span>Tone</span>
+          <select value={tone} onChange={(e) => setTone(e.target.value as AppealTone)}>
+            {APPEAL_TONES.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="appeal-field">
+          <span>Language</span>
+          <select value={language} onChange={(e) => setLanguage(e.target.value as AppealLanguage)}>
+            {APPEAL_LANGUAGES.map((l) => (
+              <option key={l}>{l}</option>
+            ))}
+          </select>
+        </label>
+        {field("organisation", "Your organisation", "e.g. Sickle Cell Society")}
+        {field("date", "Date", "e.g. Saturday 14 March, 9am–3pm")}
+        {field("venue", "Venue", "e.g. Community Hall, Accra")}
+        {field("contact", "How to reach you", "phone, email or page")}
+      </div>
+      <p className="plan-fine">
+        Leave a detail blank and it stays in [square brackets] for you to fill in. Don't type
+        patient names or donor lists here.
+      </p>
+
+      <div className="plan-actions">
+        <button className="btn" onClick={write} disabled={busy || !ready}>
+          {busy ? "Writing…" : res ? "Write it again" : "Write appeal"}
+        </button>
+        {res && (
+          <button className="btn btn-ghost" onClick={copy}>
+            {copied ? "Copied" : "Copy text"}
+          </button>
+        )}
+      </div>
+
+      {error && <div className="alert">Couldn't write the appeal: {error}</div>}
+
+      {res && (
+        <div className="appeal-result" aria-live="polite">
+          <textarea
+            className="appeal-text"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={channel === "email" ? 12 : channel === "sms" ? 4 : 8}
+            aria-label="Appeal text, editable"
+          />
+          <p className="plan-fine">
+            <span className={`src-tag ${res.source === "template" ? "is-assumed" : ""}`}>
+              {res.source === "gemini" ? "Written by Gemini" : "Offline template"}
+            </span>{" "}
+            {res.source === "template" && res.fallback_reason === "no_api_key" &&
+              "No Gemini key is set, so this is a fixed template. "}
+            {res.source === "template" && res.fallback_reason === "gemini_unavailable" &&
+              "Gemini didn't answer in time, so this is a fixed template. "}
+            {res.source === "template" && res.fallback_reason === "failed_checks" &&
+              "Gemini's wording broke a rule (it must say donation is voluntary and unpaid, and use only the plan's numbers), so this is a fixed template. "}
+            {res.note && <>{res.note} </>}
+            Written from this plan:{" "}
+            {res.facts_used.groups.length ? res.facts_used.groups.map(groupLabel).join(", ") : "no urgent groups"}
+            {res.facts_used.regular && channel !== "social" && channel !== "sms"
+              ? `; about ${res.facts_used.regular} donors`
+              : ""}
+            .
+          </p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* ───────────── how far to trust this: back-test + sensitivity ───────────── */
+
+function TrustPanel({ inputs }: { inputs: PlanInputs }) {
+  const [open, setOpen] = useState(false);
+  const [bt, setBt] = useState<BacktestResponse | null>(null);
+  const [sens, setSens] = useState<SensitivityResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const key = `${inputs.country}|${inputs.people}|${inputs.days}|${inputs.deferral}|${inputs.donationsPerDonor}|${inputs.coverage}`;
+
+  useEffect(() => {
+    if (!open || bt) return;
+    getBacktest()
+      .then(setBt)
+      .catch((e) => setError(String(e)));
+  }, [open, bt]);
+
+  useEffect(() => {
+    if (!open || !inputs.country) return;
+    let live = true;
+    setSens(null);
+    getSensitivity(inputs)
+      .then((s) => live && setSens(s))
+      .catch((e) => live && setError(String(e)));
+    return () => {
+      live = false;
+    };
+  }, [open, key]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const first = bt?.by_horizon[0];
+  const last = bt?.by_horizon[bt.by_horizon.length - 1];
+  const scale = sens ? Math.max(...sens.rows.flatMap((r) => [r.low_donors, r.high_donors]), sens.base_donors, 1) : 1;
+  const shownVal = (r: SensitivityResponse["rows"][number], v: number) =>
+    r.as_percent ? pct(v) : `${v} a year`;
+
+  return (
+    <details className="panel plan-trust no-print" onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+      <summary>
+        <span className="panel-key">7</span>
+        <h2>How far to trust this</h2>
+        <span className="plan-trust-hint">A back-test on the past, and which assumptions matter most</span>
+      </summary>
+
+      {error && <div className="alert">Couldn't load this: {error}</div>}
+
+      <h3 className="trust-h">1. Does the case-trend method hold up?</h3>
+      {!bt && !error && <p className="fine">Running the back-test…</p>}
+      {bt && first && last && (
+        <>
+          <p className="trust-text">
+            We tested the method on the past: fitted the trend to GBD data up to{" "}
+            <b>{bt.train_end}</b> only, then predicted the years after it and compared. A year
+            ahead the typical (median) error was <b>{(first.median_error * 100).toFixed(1)}%</b>;{" "}
+            {last.years_ahead} years ahead it was <b>{(last.median_error * 100).toFixed(1)}%</b>, with{" "}
+            <b>{pct(last.share_within_10pct)}</b> of countries within 10%.
+            {bt.worst_at_longest.length > 0 && (
+              <>
+                {" "}
+                The method struggled most with{" "}
+                {bt.worst_at_longest.map((w) => `${w.country} (${(w.error * 100).toFixed(0)}% off)`).join(", ")}
+                : treat those countries' projections with extra care.
+              </>
+            )}
+          </p>
+          <div className="plan-table-wrap">
+            <table className="plan-table trust-table">
+              <thead>
+                <tr>
+                  <th>Years ahead</th>
+                  <th>Year</th>
+                  <th>Typical error</th>
+                  <th>Worst 1 in 10</th>
+                  <th>Countries within 10%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bt.by_horizon.map((h) => (
+                  <tr key={h.years_ahead}>
+                    <th scope="row">{h.years_ahead}</th>
+                    <td>{h.year}</td>
+                    <td>{(h.median_error * 100).toFixed(1)}%</td>
+                    <td>{(h.p90_error * 100).toFixed(1)}%</td>
+                    <td>{pct(h.share_within_10pct)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="plan-fine">
+            Honest limit: the GBD figures are themselves modelled and smooth, so this shows the
+            trend method is stable, not that it matches counted patients. Countries with fewer than{" "}
+            {fmt(bt.min_cases)} cases are left out because small numbers make percentages
+            meaningless.
+          </p>
+        </>
+      )}
+
+      <h3 className="trust-h">2. Which assumption matters most?</h3>
+      {!sens && !error && <p className="fine">Testing the assumptions…</p>}
+      {sens && (
+        <>
+          <p className="trust-text">
+            Regular donors needed in {sens.country} is about <b>{fmt(sens.base_donors)}</b> with
+            your settings. Changing one assumption at a time, across a plausible range, moves it
+            like this (longest bar = biggest effect):
+          </p>
+          <ul className="trust-bars">
+            {sens.rows.map((r) => {
+              const lo = Math.min(r.low_donors, r.high_donors);
+              const hi = Math.max(r.low_donors, r.high_donors);
+              return (
+                <li key={r.key}>
+                  <div className="trust-bar-head">
+                    <span>{r.label}</span>
+                    <small>
+                      {shownVal(r, r.low_value)} → {fmt(r.low_donors)} donors · {shownVal(r, r.high_value)} →{" "}
+                      {fmt(r.high_donors)}
+                    </small>
+                  </div>
+                  <div className="trust-track" aria-hidden>
+                    <i
+                      className="trust-range"
+                      style={{ left: `${(lo / scale) * 100}%`, width: `${Math.max(((hi - lo) / scale) * 100, 1)}%` }}
+                    />
+                    <i className="trust-base" style={{ left: `${(sens.base_donors / scale) * 100}%` }} />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="plan-fine">
+            The dark tick is your current setting. These are assumptions, not measurements: if one
+            of them is the long bar, that is the number to confirm with the national blood service
+            first.
+          </p>
+        </>
+      )}
+    </details>
+  );
+}
+
+/* ───────────── saved plans: per account when signed in, per browser otherwise ───────────── */
+
+function SavedPlans({
+  country,
+  query,
+  onOpen,
+}: {
+  country: string;
+  query: string;
+  onOpen: (query: string) => void;
+}) {
+  const auth = useAuth();
+  const [items, setItems] = useState<SavedPlanItem[]>([]);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  const refresh = async () => {
+    try {
+      setItems(await listSavedPlans(await auth.getToken()));
+      setError(null);
+    } catch (e) {
+      setError(String(e instanceof Error ? e.message : e));
+    }
+  };
+
+  useEffect(() => {
+    if (auth.ready && (!auth.enabled || auth.signedIn)) void refresh();
+    else setItems([]);
+  }, [auth.ready, auth.signedIn]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const save = async () => {
+    const n = (name || `${country} drive`).trim().slice(0, 80);
+    setBusy(true);
+    setError(null);
+    try {
+      await savePlan(await auth.getToken(), n, country, query);
+      setName("");
+      setNote("Saved");
+      window.setTimeout(() => setNote(null), 2000);
+      await refresh();
+    } catch (e) {
+      setError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async (id: string) => {
+    try {
+      await deleteSavedPlan(await auth.getToken(), id);
+      await refresh();
+    } catch (e) {
+      setError(String(e instanceof Error ? e.message : e));
+    }
+  };
+
+  const needsSignIn = auth.enabled && !auth.signedIn;
+
+  return (
+    <section className="panel plan-saved no-print">
+      <header className="panel-head">
+        <span className="panel-key">★</span>
+        <h2>Saved plans</h2>
+        <p>
+          {auth.enabled
+            ? "Kept in your account. Only you can see them."
+            : "Kept in this browser only. Sign-in isn't set up here, so they won't follow you to another device."}
+        </p>
+      </header>
+
+      {needsSignIn ? (
+        <div className="saved-signin">
+          <p>Sign in to save plans and reopen them later.</p>
+          <button className="btn" onClick={auth.login} disabled={!auth.ready}>
+            Sign in
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="saved-add">
+            <input
+              type="text"
+              value={name}
+              maxLength={80}
+              placeholder={`${country || "Country"} drive`}
+              aria-label="Name for this plan"
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !busy && country && void save()}
+            />
+            <button className="btn" onClick={save} disabled={busy || !country}>
+              {busy ? "Saving…" : "Save this plan"}
+            </button>
+            {note && <span className="plan-note">{note}</span>}
+          </div>
+          {error && <div className="alert">{error}</div>}
+          {items.length === 0 ? (
+            <p className="plan-fine">No saved plans yet.</p>
+          ) : (
+            <ul className="saved-list">
+              {items.map((p) => (
+                <li key={p.id}>
+                  <button className="saved-open" onClick={() => onOpen(p.query)}>
+                    <b>{p.name}</b>
+                    <small>
+                      {p.country} · {new Date(p.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                    </small>
+                  </button>
+                  <button className="saved-del" onClick={() => void remove(p.id)} aria-label={`Delete ${p.name}`}>
+                    Delete
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+function PlanPage({
+  country,
+  onCountry,
+  onBack,
+  onTravel,
+  onOpenSaved,
+}: {
+  country: string;
+  onCountry: (c: string) => void;
+  onBack: () => void;
+  onTravel: (c: string) => void;
+  onOpenSaved: (query: string) => void;
+}) {
+  const q0 = useMemo(readPlanQuery, []);
+  const c = q0.get("c") || country;
+  const [people, setPeople] = useState(Math.round(numParam(q0, "p", PLAN_DEFAULTS.people, 1, 50)));
+  const [windowPos, setWindowPos] = useState(
+    daysToPos(Math.round(numParam(q0, "d", PLAN_DEFAULTS.days, 1, 365))),
+  );
+  const [deferral, setDeferral] = useState(numParam(q0, "df", PLAN_DEFAULTS.deferral, 0.05, 0.5));
+  const [donationsPerDonor, setDpd] = useState(numParam(q0, "dpd", PLAN_DEFAULTS.donationsPerDonor, 1, 4));
+  const [coverage, setCoverage] = useState(numParam(q0, "cov", PLAN_DEFAULTS.coverage, 0.05, 1));
+  const [oNegFallback, setONeg] = useState(q0.get("on") === "1");
+  const [crisisFirst, setCrisisFirst] = useState(q0.get("cf") === "1");
+  const days = posToDays(windowPos);
+
+  const [plan, setPlan] = useState<PlanResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (c) onCountry(c);
+  }, [c]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const inputs: PlanInputs = {
+    country: c,
+    people,
+    days,
+    deferral,
+    donationsPerDonor,
+    coverage,
+    oNegFallback,
+    crisisFirst,
+  };
+  const qs = planQueryString(inputs);
+
+  // Keep the address bar in step with the settings, so the link can be shared.
+  useEffect(() => {
+    if (c) window.history.replaceState(null, "", `#/plan?${qs}`);
+  }, [qs, c]);
+
+  useEffect(() => {
+    if (!c) return;
+    let live = true;
+    setLoading(true);
+    const t = window.setTimeout(() => {
+      getPlan(inputs)
+        .then((d) => {
+          if (!live) return;
+          setPlan(d);
+          setError(null);
+        })
+        .catch((e) => live && setError(String(e)))
+        .finally(() => live && setLoading(false));
+    }, 250);
+    return () => {
+      live = false;
+      window.clearTimeout(t);
+    };
+  }, [qs]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const flash = (m: string) => {
+    setNote(m);
+    window.setTimeout(() => setNote(null), 2500);
+  };
+  const copy = async (text: string, what: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      flash(`${what} copied`);
+    } catch {
+      flash("Couldn't copy: select the text and copy it by hand");
+    }
+  };
+
+  const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  const shown = plan && plan.country === c ? plan : null;
+
   return (
     <>
-      <section className="hero hero-left">
+      <section className="hero plan-hero no-print">
         <p className="eyebrow">
-          Gemini field assistant · ungrounded, verify everything
+          Drive plan <span className="dot-sep">·</span>
+          <span className={`live ${loading ? "is-busy" : ""}`}>
+            {loading ? "recalculating" : "modelled, not live stock"}
+          </span>
         </p>
-        <h1 className="hero-title">
-          Before you fly, <em>ask the briefing desk</em>
-        </h1>
+        <div className="hero-place">
+          Plan a blood drive in
+          <em className="hero-country">{c || "…"}</em>
+        </div>
+        <p className="hero-sub">
+          Which blood groups to push for, and about how many donors to recruit, from the
+          reservoir and crisis models. Change a setting and the plan updates.
+        </p>
       </section>
 
-      <div className="desk">
-        <aside className="trip">
-          <div className="ticket">
-            <span className="ticket-k">Destination</span>
-            <span className="select-wrap select-sm">
-              <select
-                value={country}
-                onChange={(e) => setCountry(e.target.value)}
-              >
-                {countries.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </span>
-            <span className="ticket-k">Travelling in</span>
+      <div className="print-only plan-print-head">
+        <b>SickleSignal · Drive plan · {c}</b>
+        <span>{today} · modelled estimates, not live stock</span>
+      </div>
+
+      <section className="panel plan-controls no-print">
+        <header className="panel-head">
+          <span className="panel-key">1</span>
+          <h2>Set the scenario</h2>
+          <p>The crisis to prepare for, and what a drive can realistically do.</p>
+        </header>
+        <div className="sim-controls">
+          <Dial
+            label="People in crisis"
+            value={people}
+            min={1}
+            max={50}
+            step={1}
+            format={(v) => `${v} ${v === 1 ? "person" : "people"}`}
+            onChange={setPeople}
+          />
+          <Dial
+            label="Time frame"
+            value={windowPos}
+            min={0}
+            max={100}
+            step={0.5}
+            format={(p) => fmtWindow(posToDays(p))}
+            onChange={setWindowPos}
+          />
+          <Dial
+            label="Share of the sickle cell blood need your drive aims to supply"
+            value={coverage}
+            min={0.05}
+            max={1}
+            step={0.05}
+            format={pct}
+            hint="One drive supplies a share of the need, not all of it."
+            onChange={setCoverage}
+          />
+          <Dial
+            label="Volunteers turned away at screening"
+            value={deferral}
+            min={0.05}
+            max={0.5}
+            step={0.01}
+            format={pct}
+            hint="Assumption: low haemoglobin, infection risk, medication."
+            onChange={setDeferral}
+          />
+          <Dial
+            label="Donations per regular donor per year"
+            value={donationsPerDonor}
+            min={1}
+            max={4}
+            step={0.5}
+            format={(v) => `${v} a year`}
+            hint="Assumption: many repeat donors give 1–2."
+            onChange={setDpd}
+          />
+        </div>
+        <div className="sim-options">
+          <Toggle
+            label="Use O− when a group runs out"
+            hint="O− is the universal red-cell donor"
+            checked={oNegFallback}
+            onChange={setONeg}
+          />
+          <Toggle
+            label="Crisis patients first"
+            hint="Hospitals hold back blood from other patients"
+            checked={crisisFirst}
+            onChange={setCrisisFirst}
+          />
+        </div>
+      </section>
+
+      {error && <div className="alert">Couldn't build the plan: {error}</div>}
+      {!shown && !error && <p className="fine plan-wait">Building the plan…</p>}
+
+      {shown && (
+        <div className={`plan-result ${loading ? "is-stale" : ""}`} aria-live="polite">
+          <section className={`panel plan-verdict verdict-${shown.verdict}`}>
+            <header className="panel-head">
+              <span className="panel-key">2</span>
+              <h2>What the crisis test says</h2>
+            </header>
+            <p className="plan-verdict-line">
+              For <b>{shown.params.people} {shown.params.people === 1 ? "person" : "people"}</b> in
+              crisis over <b>{fmtWindow(shown.params.days).replace(/ \(.*\)$/, "")}</b>,{" "}
+              <b className="sim-verdict-word">{planVerdictText(shown)}</b>
+              {shown.push.length > 0 && (
+                <>
+                  . Push for{" "}
+                  {shown.push.map((g) => (
+                    <span key={g} className="chip chip-critical sim-chip">
+                      {groupLabel(g)}
+                    </span>
+                  ))}
+                </>
+              )}
+              {shown.watch.length > 0 && (
+                <>
+                  {shown.push.length ? "; watch " : ". Watch "}
+                  {shown.watch.map((g) => (
+                    <span key={g} className="chip chip-low sim-chip">
+                      {groupLabel(g)}
+                    </span>
+                  ))}
+                </>
+              )}
+              .
+            </p>
+            <p className="plan-sub">
+              Everyone got blood in <b>{pct(shown.p_all_served)}</b> of 5,000 simulations.
+            </p>
+          </section>
+
+          <section className="panel plan-donors">
+            <header className="panel-head">
+              <span className="panel-key">3</span>
+              <h2>Donors to recruit</h2>
+              <p>
+                To supply {pct(shown.params.coverage)} of the regular blood need of people living
+                with sickle cell disease, and to cover a crisis.
+              </p>
+            </header>
+            <div className="plan-totals">
+              <div>
+                <span className="plan-total-label">Regular donors</span>
+                <b className="plan-total-num">{fmt(shown.totals.donors_ongoing.p50)}</b>
+                <small>likely {rangeText(shown.totals.donors_ongoing)}</small>
+              </div>
+              <div>
+                <span className="plan-total-label">One-off donors for the crisis</span>
+                <b className="plan-total-num">{fmt(shown.totals.donors_surge.p50)}</b>
+                <small>likely {rangeText(shown.totals.donors_surge)}</small>
+              </div>
+            </div>
+            <p className="plan-fine">
+              Totals add up the groups marked push or watch; the range assumes they all move
+              together, so it is on the wide side.
+            </p>
+
+            <div className="plan-table-wrap">
+              <table className="plan-table">
+                <thead>
+                  <tr>
+                    <th>Blood group</th>
+                    <th>Action</th>
+                    <th title="Median days of stock against the national target">Stock</th>
+                    <th title="Share of crisis simulations where this group ran short">Short in crisis</th>
+                    <th>Regular donors</th>
+                    <th>One-off donors</th>
+                    <th title="The whole country's everyday shortfall: context, not your target">
+                      Country-wide gap / yr
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {shown.groups.map((g) => (
+                    <tr key={g.blood_group} className={`is-${g.action}`}>
+                      <th scope="row">{groupLabel(g.blood_group)}</th>
+                      <td>
+                        <span
+                          className={`chip ${g.action === "push" ? "chip-critical" : g.action === "watch" ? "chip-low" : "chip-ok"}`}
+                        >
+                          {g.action === "ok" ? "no action" : g.action}
+                        </span>
+                      </td>
+                      <td>
+                        {fmtDays(g.days.p50)} of {fmtDays(shown.target_days)} days
+                      </td>
+                      <td>{pct(g.p_short)}</td>
+                      <td>
+                        {g.action === "ok" ? (
+                          "–"
+                        ) : (
+                          <>
+                            <b>{fmt(g.donors_ongoing.p50)}</b>
+                            <small>{rangeText(g.donors_ongoing)}</small>
+                          </>
+                        )}
+                      </td>
+                      <td>
+                        {g.action === "ok" ? (
+                          "–"
+                        ) : (
+                          <>
+                            <b>{fmt(g.donors_surge.p50)}</b>
+                            <small>{rangeText(g.donors_surge)}</small>
+                          </>
+                        )}
+                      </td>
+                      <td className="plan-muted">
+                        {g.extra_donations_per_year.p50 >= 1 ? fmtBig(g.extra_donations_per_year.p50) : "–"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="plan-fine">
+              Regular donors give blood several times a year. One-off donors give once, for the crisis
+              window. A drive supplies a share of the need; closing a whole country's gap takes the
+              national blood service.
+            </p>
+          </section>
+
+          <section className="panel plan-ask">
+            <header className="panel-head">
+              <span className="panel-key">4</span>
+              <h2>Your ask to the blood service</h2>
+              <p>Plain words for an email or a first meeting. Edit before sending.</p>
+            </header>
+            <p className="plan-ask-text">{shown.ask}</p>
+          </section>
+
+          <AppealWriter inputs={inputs} ready={!loading} />
+
+          <section className="panel plan-assume">
+            <header className="panel-head">
+              <span className="panel-key">6</span>
+              <h2>What this rests on</h2>
+            </header>
+            <ul className="plan-assume-list">
+              {shown.assumptions.map((a) => (
+                <li key={a.key}>
+                  <span>
+                    {a.label}
+                    {a.value !== null && (
+                      <b>
+                        {" "}
+                        {a.key === "deferral" || a.key === "coverage" || a.key === "share_in_care"
+                          ? pct(a.value)
+                          : fmtRate(a.value)}
+                      </b>
+                    )}
+                  </span>
+                  <SourceTag assumed={a.is_assumption} title={a.source} />
+                  <small>{a.source}</small>
+                </li>
+              ))}
+            </ul>
+            <p className="plan-fine">{shown.disclaimer}</p>
+          </section>
+
+          <TrustPanel inputs={inputs} />
+        </div>
+      )}
+
+      <SavedPlans country={c} query={qs} onOpen={onOpenSaved} />
+
+      <div className="hero-actions plan-actions no-print">
+        <button className="btn" onClick={() => window.print()} disabled={!shown}>
+          Print / save as PDF
+        </button>
+        <button
+          className="btn btn-ghost"
+          onClick={() => shown && copy(planSummaryText(shown, window.location.href), "Summary")}
+          disabled={!shown}
+        >
+          Copy summary
+        </button>
+        <button className="btn btn-ghost" onClick={() => copy(window.location.href, "Link")}>
+          Copy link
+        </button>
+        <button className="btn btn-ghost" onClick={() => onTravel(c)} disabled={!c}>
+          Before you travel →
+        </button>
+        <button className="btn btn-ghost" onClick={onBack}>
+          ← Back to the reservoir
+        </button>
+        {note && <span className="plan-note">{note}</span>}
+      </div>
+    </>
+  );
+}
+
+/* ───────────────────────── before you travel: the trip brief ───────────────────────── */
+
+const OFFICIAL_ADVICE = [
+  { label: "UK government travel advice", href: "https://www.gov.uk/foreign-travel-advice" },
+  { label: "US State Department advisories", href: "https://travel.state.gov/content/travel/en/traveladvisories/traveladvisories.html" },
+  { label: "WHO travel advice", href: "https://www.who.int/travel-advice" },
+];
+
+function TravelBriefPage({
+  country,
+  onCountry,
+  onBack,
+}: {
+  country: string;
+  onCountry: (c: string) => void;
+  onBack: () => void;
+}) {
+  const q0 = useMemo(readPlanQuery, []);
+  const c = q0.get("c") || country;
+  const [month, setMonth] = useState(MONTHS[new Date().getMonth()]);
+  const [brief, setBrief] = useState<BriefingResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (c) onCountry(c);
+  }, [c]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!c) return;
+    let live = true;
+    setBrief(null);
+    setError(null);
+    getBriefing(c, month)
+      .then((b) => live && setBrief(b))
+      .catch((e) => live && setError(String(e)));
+    return () => {
+      live = false;
+    };
+  }, [c, month]);
+
+  const shown = brief && brief.country === c ? brief : null;
+
+  return (
+    <>
+      <section className="hero plan-hero">
+        <p className="eyebrow">
+          Before you travel <span className="dot-sep">·</span>
+          <span className="live">{shown?.fallback_used ? "fixed checklist" : "written by Gemini"}, not verified</span>
+        </p>
+        <div className="hero-place">
+          A trip checklist for
+          <em className="hero-country">{c || "…"}</em>
+        </div>
+        <p className="hero-sub">
+          A starting list for a visiting charity team planning a blood drive. It is not travel
+          advice: read your own government's official advice first, and confirm every item with
+          the people named beside it.
+        </p>
+      </section>
+
+      <section className="panel brief-official">
+        <header className="panel-head">
+          <span className="panel-key">!</span>
+          <h2>Official advice comes first</h2>
+          <p>Current safety, entry rules and health requirements change often. Check:</p>
+        </header>
+        <ul className="brief-links">
+          {OFFICIAL_ADVICE.map((l) => (
+            <li key={l.href}>
+              <a href={l.href} target="_blank" rel="noopener noreferrer">
+                {l.label} ↗
+              </a>
+            </li>
+          ))}
+          <li>Your own government's travel advice, if it is not listed</li>
+        </ul>
+        <p className="plan-fine">
+          Run the drive through {c || "the country"}'s licensed national blood service. Donation
+          must be voluntary and unpaid.
+        </p>
+      </section>
+
+      <section className="panel brief-list checklist">
+        <header className="panel-head">
+          <span className="panel-key">✓</span>
+          <h2>Checklist</h2>
+          <label className="brief-month no-print">
+            <span>Travelling in</span>
             <span className="select-wrap select-sm">
               <select value={month} onChange={(e) => setMonth(e.target.value)}>
                 {MONTHS.map((m) => (
@@ -1930,115 +2295,43 @@ function BriefingPage({
                 ))}
               </select>
             </span>
-            <span className="ticket-perf" aria-hidden />
-            <span className="ticket-code">
-              SCD-DRIVE · {country.slice(0, 3).toUpperCase() || "---"} ·{" "}
-              {month.slice(0, 3).toUpperCase()}
-            </span>
-          </div>
-
-          <div className="checklist">
-            <h3>Pre-trip checklist</h3>
-            {!checklist && <p className="muted">Loading…</p>}
-            {checklist?.fallback_used && (
-              <p className="chip chip-low">Static fallback</p>
-            )}
-            {checklist?.sections.map((sec) => (
-              <details
-                key={sec.title}
-                open={sec.title === checklist.sections[0]?.title}
-              >
-                <summary>{sec.title}</summary>
-                <ul>
-                  {sec.items.map((it, i) => (
-                    <li key={i}>
-                      {it.text}
-                      <span className="verify">
-                        <i className={`conf conf-${it.confidence}`}>
-                          {it.confidence}
-                        </i>{" "}
-                        verify with {it.verify_with}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            ))}
-          </div>
-        </aside>
-
-        <section className="chat">
-          <div className="chat-log">
-            {messages.length === 0 && (
-              <div className="chat-empty">
-                <p className="chat-hello">
-                  Ask about safety, health precautions, logistics or local
-                  partners for a blood drive in <b>{country || "…"}</b> in{" "}
-                  <b>{month}</b>.
-                </p>
-                <div className="prompts">
-                  {suggestions.map((s) => (
-                    <button key={s} className="prompt" onClick={() => send(s)}>
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            {messages.map((m, i) => (
-              <div
-                key={i}
-                className={`msg msg-${m.role} ${m.offline ? "is-offline" : ""}`}
-              >
-                <span className="msg-who">
-                  {m.role === "user" ? "You" : "Briefing desk"}
-                </span>
-                <p>{m.text}</p>
-                {m.sources && m.sources.length > 0 && (
-                  <ul className="msg-src">
-                    {m.sources.map((s) => (
-                      <li key={s}>{s}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ))}
-            {sending && (
-              <div className="msg msg-assistant">
-                <span className="msg-who">Briefing desk</span>
-                <span className="typing">
-                  <i />
-                  <i />
-                  <i />
-                </span>
-              </div>
-            )}
-            <div ref={endRef} />
-          </div>
-          <form
-            className="composer"
-            onSubmit={(e) => {
-              e.preventDefault();
-              send(draft);
-            }}
-          >
-            <textarea
-              rows={2}
-              value={draft}
-              placeholder={`Ask about ${country || "your destination"}…`}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={onKey}
-            />
-            <button className="btn" disabled={!draft.trim() || sending}>
-              Send
-            </button>
-          </form>
-          <p className="fine">
-            AI answers can be wrong or out of date. Check current safety advice
-            on your government's official travel site and with the national
-            blood service.
+          </label>
+        </header>
+        {error && <div className="alert">Couldn't load the checklist: {error}</div>}
+        {!shown && !error && <p className="fine">Loading…</p>}
+        {shown?.sections.map((sec, i) => (
+          <details key={sec.title} open={i === 0} className="brief-sec">
+            <summary>{sec.title}</summary>
+            <ul>
+              {sec.items.map((it, j) => (
+                <li key={j}>
+                  {it.text}
+                  <span className="verify">
+                    <i className={`conf conf-${it.confidence}`}>{it.confidence}</i> verify with{" "}
+                    {it.verify_with}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        ))}
+        {shown && (
+          <p className="plan-fine">
+            {shown.fallback_used
+              ? "This is a fixed starter list (no Gemini answer was available). "
+              : "Written by Gemini without live sources, so it can be wrong or out of date. "}
+            Confidence is the writer's own guess.
           </p>
-        </section>
+        )}
+      </section>
+
+      <div className="hero-actions plan-actions no-print">
+        <button className="btn" onClick={() => window.print()} disabled={!shown}>
+          Print / save as PDF
+        </button>
+        <button className="btn btn-ghost" onClick={onBack}>
+          ← Back to the plan
+        </button>
       </div>
     </>
   );
