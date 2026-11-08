@@ -1,0 +1,580 @@
+{
+  "meta": {
+    "description": "People living with sickle cell disorders in 2026, per country, projected from the GBD series. `intensity` is a log-scaled 0-1 value for colouring the map; `bucket` is the legend band.",
+    "source": "GBD 2021 sickle cell disorders prevalence, all ages, both sexes",
+    "year": 2026,
+    "data_year": 2023,
+    "method": "Log-linear trend over 10 years of history, extrapolated 3 years.",
+    "scale": {
+      "field": "cases",
+      "type": "log",
+      "floor_cases": 1,
+      "min": 0,
+      "max": 2956972,
+      "buckets": [
+        {
+          "label": "very low",
+          "max_cases": 1000
+        },
+        {
+          "label": "low",
+          "max_cases": 10000
+        },
+        {
+          "label": "moderate",
+          "max_cases": 100000
+        },
+        {
+          "label": "high",
+          "max_cases": 500000
+        },
+        {
+          "label": "very high",
+          "max_cases": null
+        }
+      ]
+    }
+  },
+  "countries": [
+    {
+      "country": "Nigeria",
+      "iso3": "NGA",
+      "cases": 2956972,
+      "cases_low": 2416783,
+      "cases_high": 3707162,
+      "growth_pct_per_year": 2.5,
+      "intensity": 1.0,
+      "bucket": "very high"
+    },
+    {
+      "country": "Democratic Republic of the Congo",
+      "iso3": "COD",
+      "cases": 705078,
+      "cases_low": 601511,
+      "cases_high": 824836,
+      "growth_pct_per_year": 2.41,
+      "intensity": 0.904,
+      "bucket": "very high"
+    },
+    {
+      "country": "Burkina Faso",
+      "iso3": "BFA",
+      "cases": 262907,
+      "cases_low": 220253,
+      "cases_high": 319361,
+      "growth_pct_per_year": -1.66,
+      "intensity": 0.838,
+      "bucket": "high"
+    },
+    {
+      "country": "Kenya",
+      "iso3": "KEN",
+      "cases": 253506,
+      "cases_low": 198121,
+      "cases_high": 331222,
+      "growth_pct_per_year": 0.64,
+      "intensity": 0.835,
+      "bucket": "high"
+    },
+    {
+      "country": "Ghana",
+      "iso3": "GHA",
+      "cases": 239680,
+      "cases_low": 212506,
+      "cases_high": 275148,
+      "growth_pct_per_year": 0.46,
+      "intensity": 0.831,
+      "bucket": "high"
+    },
+    {
+      "country": "Angola",
+      "iso3": "AGO",
+      "cases": 213648,
+      "cases_low": 175478,
+      "cases_high": 259857,
+      "growth_pct_per_year": 3.06,
+      "intensity": 0.824,
+      "bucket": "high"
+    },
+    {
+      "country": "Benin",
+      "iso3": "BEN",
+      "cases": 197831,
+      "cases_low": 164675,
+      "cases_high": 240733,
+      "growth_pct_per_year": 2.27,
+      "intensity": 0.818,
+      "bucket": "high"
+    },
+    {
+      "country": "United Republic of Tanzania",
+      "iso3": "TZA",
+      "cases": 181401,
+      "cases_low": 154021,
+      "cases_high": 211171,
+      "growth_pct_per_year": 2.48,
+      "intensity": 0.813,
+      "bucket": "high"
+    },
+    {
+      "country": "Niger",
+      "iso3": "NER",
+      "cases": 179898,
+      "cases_low": 156832,
+      "cases_high": 210810,
+      "growth_pct_per_year": 3.68,
+      "intensity": 0.812,
+      "bucket": "high"
+    },
+    {
+      "country": "Cameroon",
+      "iso3": "CMR",
+      "cases": 149447,
+      "cases_low": 127083,
+      "cases_high": 176259,
+      "growth_pct_per_year": 2.91,
+      "intensity": 0.8,
+      "bucket": "high"
+    },
+    {
+      "country": "Guinea",
+      "iso3": "GIN",
+      "cases": 144228,
+      "cases_low": 124935,
+      "cases_high": 172351,
+      "growth_pct_per_year": 2.56,
+      "intensity": 0.797,
+      "bucket": "high"
+    },
+    {
+      "country": "Uganda",
+      "iso3": "UGA",
+      "cases": 114707,
+      "cases_low": 96372,
+      "cases_high": 133704,
+      "growth_pct_per_year": 1.9,
+      "intensity": 0.782,
+      "bucket": "high"
+    },
+    {
+      "country": "Egypt",
+      "iso3": "EGY",
+      "cases": 113010,
+      "cases_low": 95840,
+      "cases_high": 129843,
+      "growth_pct_per_year": 1.41,
+      "intensity": 0.781,
+      "bucket": "high"
+    },
+    {
+      "country": "Sudan",
+      "iso3": "SDN",
+      "cases": 111325,
+      "cases_low": 89687,
+      "cases_high": 139205,
+      "growth_pct_per_year": -3.08,
+      "intensity": 0.78,
+      "bucket": "high"
+    },
+    {
+      "country": "Côte d'Ivoire",
+      "iso3": "CIV",
+      "cases": 101257,
+      "cases_low": 90650,
+      "cases_high": 114061,
+      "growth_pct_per_year": 3.7,
+      "intensity": 0.774,
+      "bucket": "high"
+    },
+    {
+      "country": "Sierra Leone",
+      "iso3": "SLE",
+      "cases": 91934,
+      "cases_low": 79366,
+      "cases_high": 107495,
+      "growth_pct_per_year": 0.53,
+      "intensity": 0.767,
+      "bucket": "moderate"
+    },
+    {
+      "country": "Mali",
+      "iso3": "MLI",
+      "cases": 85391,
+      "cases_low": 75137,
+      "cases_high": 97653,
+      "growth_pct_per_year": 3.01,
+      "intensity": 0.762,
+      "bucket": "moderate"
+    },
+    {
+      "country": "Togo",
+      "iso3": "TGO",
+      "cases": 84173,
+      "cases_low": 73786,
+      "cases_high": 95851,
+      "growth_pct_per_year": 1.56,
+      "intensity": 0.761,
+      "bucket": "moderate"
+    },
+    {
+      "country": "Zambia",
+      "iso3": "ZMB",
+      "cases": 69297,
+      "cases_low": 57973,
+      "cases_high": 87177,
+      "growth_pct_per_year": 2.87,
+      "intensity": 0.748,
+      "bucket": "moderate"
+    },
+    {
+      "country": "Senegal",
+      "iso3": "SEN",
+      "cases": 57598,
+      "cases_low": 49688,
+      "cases_high": 67466,
+      "growth_pct_per_year": 3.12,
+      "intensity": 0.736,
+      "bucket": "moderate"
+    },
+    {
+      "country": "Madagascar",
+      "iso3": "MDG",
+      "cases": 46806,
+      "cases_low": 39474,
+      "cases_high": 56307,
+      "growth_pct_per_year": 2.01,
+      "intensity": 0.722,
+      "bucket": "moderate"
+    },
+    {
+      "country": "Central African Republic",
+      "iso3": "CAF",
+      "cases": 27688,
+      "cases_low": 23409,
+      "cases_high": 33287,
+      "growth_pct_per_year": 2.22,
+      "intensity": 0.687,
+      "bucket": "moderate"
+    },
+    {
+      "country": "Chad",
+      "iso3": "TCD",
+      "cases": 23649,
+      "cases_low": 20197,
+      "cases_high": 27753,
+      "growth_pct_per_year": 3.74,
+      "intensity": 0.676,
+      "bucket": "moderate"
+    },
+    {
+      "country": "Libya",
+      "iso3": "LBY",
+      "cases": 17203,
+      "cases_low": 14343,
+      "cases_high": 20149,
+      "growth_pct_per_year": 0.13,
+      "intensity": 0.655,
+      "bucket": "moderate"
+    },
+    {
+      "country": "Congo",
+      "iso3": "COG",
+      "cases": 16447,
+      "cases_low": 13954,
+      "cases_high": 19108,
+      "growth_pct_per_year": 1.87,
+      "intensity": 0.652,
+      "bucket": "moderate"
+    },
+    {
+      "country": "Equatorial Guinea",
+      "iso3": "GNQ",
+      "cases": 14285,
+      "cases_low": 11921,
+      "cases_high": 17136,
+      "growth_pct_per_year": 2.19,
+      "intensity": 0.642,
+      "bucket": "moderate"
+    },
+    {
+      "country": "Liberia",
+      "iso3": "LBR",
+      "cases": 10084,
+      "cases_low": 8676,
+      "cases_high": 11543,
+      "growth_pct_per_year": 1.55,
+      "intensity": 0.619,
+      "bucket": "moderate"
+    },
+    {
+      "country": "Gambia",
+      "iso3": "GMB",
+      "cases": 8075,
+      "cases_low": 6877,
+      "cases_high": 9407,
+      "growth_pct_per_year": 1.68,
+      "intensity": 0.604,
+      "bucket": "low"
+    },
+    {
+      "country": "Gabon",
+      "iso3": "GAB",
+      "cases": 7650,
+      "cases_low": 6498,
+      "cases_high": 9529,
+      "growth_pct_per_year": 1.2,
+      "intensity": 0.6,
+      "bucket": "low"
+    },
+    {
+      "country": "Tunisia",
+      "iso3": "TUN",
+      "cases": 6530,
+      "cases_low": 5190,
+      "cases_high": 8127,
+      "growth_pct_per_year": -0.15,
+      "intensity": 0.59,
+      "bucket": "low"
+    },
+    {
+      "country": "Malawi",
+      "iso3": "MWI",
+      "cases": 6127,
+      "cases_low": 5151,
+      "cases_high": 7609,
+      "growth_pct_per_year": 1.69,
+      "intensity": 0.585,
+      "bucket": "low"
+    },
+    {
+      "country": "Mauritania",
+      "iso3": "MRT",
+      "cases": 5035,
+      "cases_low": 4187,
+      "cases_high": 5995,
+      "growth_pct_per_year": 2.04,
+      "intensity": 0.572,
+      "bucket": "low"
+    },
+    {
+      "country": "Algeria",
+      "iso3": "DZA",
+      "cases": 4294,
+      "cases_low": 3532,
+      "cases_high": 5016,
+      "growth_pct_per_year": 0.84,
+      "intensity": 0.561,
+      "bucket": "low"
+    },
+    {
+      "country": "Morocco",
+      "iso3": "MAR",
+      "cases": 3783,
+      "cases_low": 3100,
+      "cases_high": 4458,
+      "growth_pct_per_year": -0.24,
+      "intensity": 0.553,
+      "bucket": "low"
+    },
+    {
+      "country": "Burundi",
+      "iso3": "BDI",
+      "cases": 3757,
+      "cases_low": 3054,
+      "cases_high": 4814,
+      "growth_pct_per_year": 2.51,
+      "intensity": 0.552,
+      "bucket": "low"
+    },
+    {
+      "country": "Mozambique",
+      "iso3": "MOZ",
+      "cases": 2264,
+      "cases_low": 1923,
+      "cases_high": 2647,
+      "growth_pct_per_year": 2.43,
+      "intensity": 0.518,
+      "bucket": "low"
+    },
+    {
+      "country": "Ethiopia",
+      "iso3": "ETH",
+      "cases": 1642,
+      "cases_low": 1242,
+      "cases_high": 2177,
+      "growth_pct_per_year": 1.24,
+      "intensity": 0.497,
+      "bucket": "low"
+    },
+    {
+      "country": "Sao Tome and Principe",
+      "iso3": "STP",
+      "cases": 1082,
+      "cases_low": 871,
+      "cases_high": 1332,
+      "growth_pct_per_year": 0.46,
+      "intensity": 0.469,
+      "bucket": "low"
+    },
+    {
+      "country": "Rwanda",
+      "iso3": "RWA",
+      "cases": 1072,
+      "cases_low": 874,
+      "cases_high": 1333,
+      "growth_pct_per_year": 0.91,
+      "intensity": 0.468,
+      "bucket": "low"
+    },
+    {
+      "country": "South Sudan",
+      "iso3": "SSD",
+      "cases": 921,
+      "cases_low": 727,
+      "cases_high": 1193,
+      "growth_pct_per_year": -1.93,
+      "intensity": 0.458,
+      "bucket": "very low"
+    },
+    {
+      "country": "Zimbabwe",
+      "iso3": "ZWE",
+      "cases": 904,
+      "cases_low": 729,
+      "cases_high": 1134,
+      "growth_pct_per_year": 0.58,
+      "intensity": 0.457,
+      "bucket": "very low"
+    },
+    {
+      "country": "Eritrea",
+      "iso3": "ERI",
+      "cases": 628,
+      "cases_low": 495,
+      "cases_high": 811,
+      "growth_pct_per_year": 1.15,
+      "intensity": 0.432,
+      "bucket": "very low"
+    },
+    {
+      "country": "Guinea-Bissau",
+      "iso3": "GNB",
+      "cases": 587,
+      "cases_low": 484,
+      "cases_high": 722,
+      "growth_pct_per_year": 1.29,
+      "intensity": 0.428,
+      "bucket": "very low"
+    },
+    {
+      "country": "Botswana",
+      "iso3": "BWA",
+      "cases": 423,
+      "cases_low": 357,
+      "cases_high": 499,
+      "growth_pct_per_year": 0.61,
+      "intensity": 0.406,
+      "bucket": "very low"
+    },
+    {
+      "country": "Somalia",
+      "iso3": "SOM",
+      "cases": 378,
+      "cases_low": 279,
+      "cases_high": 507,
+      "growth_pct_per_year": 3.95,
+      "intensity": 0.398,
+      "bucket": "very low"
+    },
+    {
+      "country": "Cabo Verde",
+      "iso3": "CPV",
+      "cases": 225,
+      "cases_low": 184,
+      "cases_high": 274,
+      "growth_pct_per_year": -1.63,
+      "intensity": 0.364,
+      "bucket": "very low"
+    },
+    {
+      "country": "South Africa",
+      "iso3": "ZAF",
+      "cases": 168,
+      "cases_low": 126,
+      "cases_high": 216,
+      "growth_pct_per_year": 0.23,
+      "intensity": 0.344,
+      "bucket": "very low"
+    },
+    {
+      "country": "Djibouti",
+      "iso3": "DJI",
+      "cases": 111,
+      "cases_low": 88,
+      "cases_high": 141,
+      "growth_pct_per_year": 2.17,
+      "intensity": 0.316,
+      "bucket": "very low"
+    },
+    {
+      "country": "Namibia",
+      "iso3": "NAM",
+      "cases": 25,
+      "cases_low": 19,
+      "cases_high": 31,
+      "growth_pct_per_year": 2.06,
+      "intensity": 0.216,
+      "bucket": "very low"
+    },
+    {
+      "country": "Comoros",
+      "iso3": "COM",
+      "cases": 16,
+      "cases_low": 12,
+      "cases_high": 22,
+      "growth_pct_per_year": 1.31,
+      "intensity": 0.186,
+      "bucket": "very low"
+    },
+    {
+      "country": "Lesotho",
+      "iso3": "LSO",
+      "cases": 12,
+      "cases_low": 9,
+      "cases_high": 15,
+      "growth_pct_per_year": -0.94,
+      "intensity": 0.167,
+      "bucket": "very low"
+    },
+    {
+      "country": "Eswatini",
+      "iso3": "SWZ",
+      "cases": 9,
+      "cases_low": 7,
+      "cases_high": 11,
+      "growth_pct_per_year": -0.61,
+      "intensity": 0.147,
+      "bucket": "very low"
+    },
+    {
+      "country": "Mauritius",
+      "iso3": "MUS",
+      "cases": 0,
+      "cases_low": 0,
+      "cases_high": 1,
+      "growth_pct_per_year": -1.31,
+      "intensity": 0.0,
+      "bucket": "very low"
+    },
+    {
+      "country": "Seychelles",
+      "iso3": "SYC",
+      "cases": 0,
+      "cases_low": 0,
+      "cases_high": 0,
+      "growth_pct_per_year": 0.14,
+      "intensity": 0.0,
+      "bucket": "very low"
+    }
+  ]
+}

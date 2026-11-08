@@ -92,3 +92,50 @@ people, all ages, both sexes) for 54 African countries, 1996-2023, with a 95% in
 Not modelled: the effect of screening or treatment, migration, changes in survival or
 birth rates over time, and any difference between SCD and SCA (the data counts all
 sickle cell disorders; the birth fraction is calibrated on SCA).
+
+## Pre-built data files (`scripts/build_data.py`)
+
+Run `python scripts/build_data.py` to regenerate both files from the GBD exports in
+`data/`. No dependencies beyond the standard library; the output is deterministic.
+
+### `data/processed/usecases.json`
+
+100 likely sickle-cell patient personas per country (`age_group`, `sex`, `blood_ml`,
+`units`). The age and sex mix is **real**: the 2023 GBD prevalence distribution over the
+seven GBD age groups by sex, allocated to 100 whole personas by the largest-remainder
+method, so the set mirrors who actually lives with the disease in that country rather
+than a random draw. The profiles differ sharply and meaningfully — Nigeria comes out
+child-heavy (≈55 of 100 under 10), Algeria adult-heavy (≈45 of 100 aged 20+), which
+tracks differences in survival to adulthood.
+
+`blood_ml` is an **ASSUMPTION**, not data: red cells transfused in one acute episode.
+Children are dosed by weight (10-15 mL/kg red cells) and adults in whole units, so the
+dose rises steeply with age — 75 mL under 1 year to 620 mL at 20+. Adolescent and adult
+women get ×0.9 for lower average body weight. Per-age min/max bounds are in the file's
+`meta.blood_ml_assumption` for a UI that wants to show a range. These figures are
+consistent with `units_per_crisis_by_age` in `backend/app/model.py` at ~250 mL per unit.
+The file describes one episode per patient, not annual demand — episode *frequency* is
+the model's job (see above).
+
+### `data/processed/heatmap.json`
+
+People living with SCD per country in the target year (default: the current year),
+projected from `data/raw.csv` by a log-linear trend fitted over the last 10 years of
+history and extrapolated past 2023. Fitted growth rates land between −3.1% and +4.0% a
+year, so no country's projection is implausible. Per country: `iso3` (for the map),
+`cases`, `cases_low`/`cases_high`, `growth_pct_per_year`, `intensity` and `bucket`.
+
+`cases_low`/`cases_high` carry the 2023 GBD 95% interval forward at its original
+relative width. It covers uncertainty in today's count but **not** in the trend, so it
+is a floor on the true uncertainty, narrower than the Monte Carlo interval
+`hotspots.py` produces for the same quantity.
+
+No population denominator is available in these exports, so the map shows **absolute
+cases, not prevalence per 100k**. For blood-supply planning that is the wanted quantity:
+units needed scale with the number of patients, not with how common the disease is.
+
+Cases span four orders of magnitude (0 in Seychelles to ≈3.0M in Nigeria), so
+`intensity` is log-scaled 0-1 (floored at 1 case) for direct use in a colour ramp — on a
+linear scale every country but Nigeria would be the same shade. `bucket` gives a fixed
+five-band legend (<1k / <10k / <100k / <500k / rest) that stays stable between runs;
+the thresholds are in `meta.scale.buckets`.
