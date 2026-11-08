@@ -35,12 +35,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/** Remembers that a signed-out visitor chose "explore as a guest" for this browser tab. */
+export const ENTERED_KEY = "sicklesignal.entered";
+
+export interface LoginOptions {
+  /** Open Auth0's sign-up form instead of the log-in form. */
+  signup?: boolean;
+  /** Go straight to one social connection, e.g. "google-oauth2". */
+  connection?: string;
+}
+
 export interface AuthApi {
   enabled: boolean;
   ready: boolean;
   signedIn: boolean;
   label: string;
-  login: () => void;
+  login: (o?: LoginOptions) => void;
   logout: () => void;
   getToken: () => Promise<string | null>;
 }
@@ -64,8 +74,22 @@ export function useAuth(): AuthApi {
     ready: !a.isLoading,
     signedIn: a.isAuthenticated,
     label: a.user?.name || a.user?.email || "Signed in",
-    login: () => void a.loginWithRedirect({ appState: { returnTo: window.location.hash } }),
-    logout: () => void a.logout({ logoutParams: { returnTo: window.location.origin } }),
+    login: (o) =>
+      void a.loginWithRedirect({
+        appState: { returnTo: window.location.hash || "#/hotspots" },
+        authorizationParams: {
+          ...(o?.signup ? { screen_hint: "signup" } : {}),
+          ...(o?.connection ? { connection: o.connection } : {}),
+        },
+      }),
+    logout: () => {
+      try {
+        sessionStorage.removeItem(ENTERED_KEY);
+      } catch {
+        /* private window: nothing to forget */
+      }
+      void a.logout({ logoutParams: { returnTo: window.location.origin } });
+    },
     getToken: async () => {
       try {
         return await a.getAccessTokenSilently();
@@ -92,7 +116,7 @@ export function AuthControls() {
           </button>
         </>
       ) : (
-        <button className="who-out" onClick={a.login} disabled={!a.ready}>
+        <button className="who-out" onClick={() => a.login()} disabled={!a.ready}>
           Sign in
         </button>
       )}

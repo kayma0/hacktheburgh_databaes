@@ -1866,7 +1866,7 @@ function SavedPlans({
       {needsSignIn ? (
         <div className="saved-signin">
           <p>Sign in to save plans and reopen them later.</p>
-          <button className="btn" onClick={auth.login} disabled={!auth.ready}>
+          <button className="btn" onClick={() => auth.login()} disabled={!auth.ready}>
             Sign in
           </button>
         </div>

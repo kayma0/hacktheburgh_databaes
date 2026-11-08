@@ -2364,7 +2364,7 @@ input[type="range"]:focus-visible {
   .sim-controls {
     grid-template-columns: 1fr;
   }
-  }
+}
 
 /* ── simulator: options, actions ─────────────────────────────── */
 .sim-options {
@@ -2382,7 +2382,9 @@ input[type="range"]:focus-visible {
   border: 1px solid var(--rule);
   border-radius: 6px;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
 }
 .toggle:hover {
   background: var(--paper-2);
@@ -3054,7 +3056,9 @@ input[type="range"]:focus-visible {
   background: var(--card);
   color: var(--ink);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
 }
 .seg:hover {
   border-color: var(--firebrick);
