@@ -2103,6 +2103,9 @@ input[type="range"]:focus-visible {
   transition: width 0.6s ease;
 }
 .hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
   margin-top: 18px;
 }
 @media (max-width: 560px) {
@@ -3365,4 +3368,146 @@ input[type="range"]:focus-visible {
 }
 .sim .panel-head p {
   margin-top: 4px;
+}
+
+/* ── responsive safety net ─────────────────────────────── */
+/* Grid and flex children default to min-width:auto, so one wide table or long word can
+   stretch a whole page sideways on a phone. Let them shrink; tables scroll in their wrap. */
+.panel,
+.plan-result > * {
+  min-width: 0;
+}
+.plan-table-wrap,
+.sim-table-wrap {
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Phones: action buttons stack, full width, evenly spaced. */
+@media (max-width: 560px) {
+  .hero-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .hero-actions .btn {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+}
+
+/* Big monitors: scale the whole app (header, page, footer) up together so it does not
+   sit small in a sea of empty space. */
+@media (min-width: 2200px) {
+  .shell {
+    zoom: 1.25;
+  }
+}
+@media (min-width: 3000px) {
+  .shell {
+    zoom: 1.6;
+  }
+}
+
+/* Phones: the donor table becomes one card per blood group, so no column is cut off. */
+@media (max-width: 640px) {
+  .plan-table-wrap .plan-table:not(.trust-table) {
+    display: block;
+  }
+  .plan-table:not(.trust-table) thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .plan-table:not(.trust-table) tbody {
+    display: grid;
+    gap: 12px;
+  }
+  .plan-table:not(.trust-table) tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 14px;
+    padding: 12px 14px;
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    background: var(--card);
+  }
+  .plan-table:not(.trust-table) tr.is-ok {
+    opacity: 0.7;
+  }
+  .plan-table:not(.trust-table) th[scope="row"],
+  .plan-table:not(.trust-table) td[data-label="Action"] {
+    grid-row: 1;
+    padding: 0 0 8px;
+    border: 0;
+    align-self: center;
+  }
+  .plan-table:not(.trust-table) td[data-label="Action"] {
+    justify-self: end;
+  }
+  .plan-table:not(.trust-table) td {
+    display: block;
+    padding: 6px 0;
+    border: 0;
+    border-top: 1px solid var(--rule);
+  }
+  .plan-table:not(.trust-table) td[data-label="Action"] {
+    border-top: 0;
+  }
+  .plan-table:not(.trust-table) td[data-label]:not([data-label="Action"])::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 2px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+  .plan-table:not(.trust-table) td small {
+    display: block;
+  }
+  .plan-table:not(.trust-table) td[data-label="Country-wide gap / yr"] {
+    grid-column: 1 / -1;
+  }
+  /* nothing to recruit for these, so keep their card short */
+  .plan-table:not(.trust-table) tr.is-ok td[data-label="Regular donors"],
+  .plan-table:not(.trust-table) tr.is-ok td[data-label="One-off donors"],
+  .plan-table:not(.trust-table) tr.is-ok td[data-label="Country-wide gap / yr"] {
+    display: none;
+  }
+}
+
+/* Header: brand on the left, account on the right, always one row (the bar only holds
+   those two now). The name shrinks, then hides, before anything wraps or overlaps. */
+.mast-inner {
+  flex-wrap: nowrap;
+}
+.mast .brand {
+  flex: none;
+}
+.mast .who {
+  min-width: 0;
+}
+@media (max-width: 560px) {
+  .mast-inner {
+    gap: 10px;
+  }
+  .brand-word {
+    font-size: 21px;
+  }
+  .who {
+    gap: 8px;
+  }
+  .who-org {
+    max-width: 96px;
+    font-size: 14px;
+  }
+}
+@media (max-width: 400px) {
+  .who-org {
+    display: none;
+  }
 }

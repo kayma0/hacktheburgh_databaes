@@ -2183,18 +2183,18 @@ function PlanPage({
                   {shown.groups.map((g) => (
                     <tr key={g.blood_group} className={`is-${g.action}`}>
                       <th scope="row">{groupLabel(g.blood_group)}</th>
-                      <td>
+                      <td data-label="Action">
                         <span
                           className={`chip ${g.action === "push" ? "chip-critical" : g.action === "watch" ? "chip-low" : "chip-ok"}`}
                         >
                           {g.action === "ok" ? "no action" : g.action}
                         </span>
                       </td>
-                      <td>
+                      <td data-label="Stock">
                         {fmtDays(g.days.p50)} of {fmtDays(shown.target_days)} days
                       </td>
-                      <td>{pct(g.p_short)}</td>
-                      <td>
+                      <td data-label="Short in crisis">{pct(g.p_short)}</td>
+                      <td data-label="Regular donors">
                         {g.action === "ok" ? (
                           "–"
                         ) : (
@@ -2204,7 +2204,7 @@ function PlanPage({
                           </>
                         )}
                       </td>
-                      <td>
+                      <td data-label="One-off donors">
                         {g.action === "ok" ? (
                           "–"
                         ) : (
@@ -2214,7 +2214,7 @@ function PlanPage({
                           </>
                         )}
                       </td>
-                      <td className="plan-muted">
+                      <td className="plan-muted" data-label="Country-wide gap / yr">
                         {g.extra_donations_per_year.p50 >= 1 ? fmtBig(g.extra_donations_per_year.p50) : "–"}
                       </td>
                     </tr>
