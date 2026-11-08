@@ -423,7 +423,6 @@ export async function getSensitivity(i: PlanInputs): Promise<SensitivityResponse
 
 export interface BriefingItem {
   text: string;
-  verify_with: string;
 }
 
 export interface BriefingSection {

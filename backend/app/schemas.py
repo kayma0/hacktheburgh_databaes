@@ -374,7 +374,6 @@ class BriefingRequest(BaseModel):
 
 class BriefingItem(BaseModel):
     text: str
-    verify_with: str
 
 
 class BriefingSection(BaseModel):

@@ -2292,6 +2292,15 @@ const OFFICIAL_ADVICE = [
   { label: "WHO travel advice", href: "https://www.who.int/travel-advice" },
 ];
 
+/** The section title the backend gives the gov.uk-sourced points. */
+const CURRENT_SITUATION = "Current situation";
+
+/** "2026-11-04" -> "04/11/2026". */
+function ukDate(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  return d && m && y ? `${d}/${m}/${y}` : iso;
+}
+
 function TravelBriefPage({
   country,
   onCountry,
@@ -2332,45 +2341,37 @@ function TravelBriefPage({
         <p className="eyebrow">
           Before you travel <span className="dot-sep">·</span>
           <span className="live">
-            {shown?.fallback_used ? "fixed checklist" : "written by Gemini"}, not verified
+            {shown?.fallback_used ? "fixed checklist" : "written by Gemini"}, verify with
+            government's official advice
           </span>
         </p>
         <div className="hero-place">
           A trip checklist for
           <em className="hero-country">{c || "…"}</em>
         </div>
-        <p className="hero-sub">
-          A starting list for a visiting charity team planning a blood drive. It is not travel
-          advice: read your own government's official advice first, and confirm every item with
-          the people named beside it.
-        </p>
       </section>
 
       <section className="panel brief-list checklist">
         <header className="panel-head">
           <span className="panel-key">✓</span>
           <h2>Checklist</h2>
-          {shown?.updated && (
-            <p>
-              Current situation from{" "}
-              <a href={shown.sources[0]} target="_blank" rel="noopener noreferrer">
-                gov.uk travel advice ↗
-              </a>{" "}
-              <span className="dot-sep">·</span> updated {shown.updated}
-            </p>
-          )}
         </header>
         {error && <div className="alert">Couldn't load the checklist: {error}</div>}
         {!shown && !error && <p className="fine">Loading…</p>}
         {shown?.sections.map((sec, i) => (
           <details key={sec.title} open={i === 0} className="brief-sec">
             <summary>{sec.title}</summary>
+            {sec.title === CURRENT_SITUATION && shown.updated && (
+              <p className="brief-source">
+                updated {ukDate(shown.updated)} from{" "}
+                <a href={shown.sources[0]} target="_blank" rel="noopener noreferrer">
+                  gov.uk travel advice ↗
+                </a>
+              </p>
+            )}
             <ul>
               {sec.items.map((it, j) => (
-                <li key={j}>
-                  {it.text}
-                  <span className="verify">verify with {it.verify_with}</span>
-                </li>
+                <li key={j}>{it.text}</li>
               ))}
             </ul>
           </details>
@@ -2403,10 +2404,6 @@ function TravelBriefPage({
           ))}
           <li>Your own government's travel advice, if it is not listed</li>
         </ul>
-        <p className="plan-fine">
-          Run the drive through {c || "the country"}'s licensed national blood service. Donation
-          must be voluntary and unpaid.
-        </p>
       </section>
 
       <div className="hero-actions plan-actions no-print">

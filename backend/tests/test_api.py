@@ -483,9 +483,10 @@ def test_briefing_takes_no_month():
     assert set(BriefingRequest.model_fields) == {"country"}
 
 
-def test_briefing_items_have_no_confidence():
+def test_briefing_items_are_text_only():
+    """No confidence badge and no 'verify with' line: the page shows the point itself."""
     from app.schemas import BriefingItem
-    assert set(BriefingItem.model_fields) == {"text", "verify_with"}
+    assert set(BriefingItem.model_fields) == {"text"}
 
 
 def test_briefing_prompt_carries_the_govuk_facts(monkeypatch):
@@ -494,8 +495,7 @@ def test_briefing_prompt_carries_the_govuk_facts(monkeypatch):
 
     def spy(country, facts):
         seen["p"] = b._prompt(country, facts)
-        return [b.BriefingSection(title=b.CURRENT,
-                                  items=[b._item("Avoid the Bawku area.", "gov.uk")])]
+        return [b.BriefingSection(title=b.CURRENT, items=[b._item("Avoid the Bawku area.")])]
     monkeypatch.setattr(b, "_call_gemini", spy)
     body = _brief(monkeypatch, key="x").json()
     assert "Bawku" in seen["p"] and "2026-11-04" in seen["p"]
@@ -510,12 +510,12 @@ def test_briefing_prompt_carries_the_govuk_facts(monkeypatch):
 def test_briefing_current_situation_comes_first(monkeypatch):
     from app import briefing as b
     monkeypatch.setattr(b, "_call_gemini", lambda c, f: [
-        b.BriefingSection(title=b.CURRENT, items=[b._item("Avoid Bawku.", "gov.uk")]),
-        b.BriefingSection(title="Logistics", items=[b._item("Book transport.", "Partner")]),
+        b.BriefingSection(title=b.CURRENT, items=[b._item("Avoid Bawku.")]),
+        b.BriefingSection(title="Logistics", items=[b._item("Book transport.")]),
     ])
     secs = _brief(monkeypatch, key="x").json()["sections"]
     assert secs[0]["title"] == "Current situation"
-    assert secs[0]["items"][0] == {"text": "Avoid Bawku.", "verify_with": "gov.uk"}
+    assert secs[0]["items"][0] == {"text": "Avoid Bawku."}
 
 
 def test_briefing_keeps_govuk_facts_when_gemini_fails(monkeypatch):
@@ -548,8 +548,7 @@ def test_briefing_no_warning_country_says_so(monkeypatch):
         raise RuntimeError("down")
     monkeypatch.setattr(b, "_call_gemini", boom)
     first = _brief(monkeypatch, facts=facts, key="x").json()["sections"][0]
-    assert first["items"] == [{"text": "The FCDO does not advise against travel to this country.",
-                               "verify_with": "gov.uk travel advice"}]
+    assert first["items"] == [{"text": "The FCDO does not advise against travel to this country."}]
 
 
 def test_govuk_slugs_cover_every_country():
