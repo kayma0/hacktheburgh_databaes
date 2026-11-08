@@ -1,5 +1,10 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import type { CSSProperties, KeyboardEvent } from "react";
+import africaGeo from "./africaGeo.json";
+import type {
+  CSSProperties,
+  KeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+} from "react";
 import {
   askAssistant,
   getBriefing,
@@ -1056,215 +1061,33 @@ function Dial({
 
 /* ───────────────────────── page 01: hotspots ───────────────────────── */
 
-// Equirectangular projection for the Africa frame.
-const K = 8;
-const proj = (lon: number, lat: number): [number, number] => [
-  (lon + 19) * K,
-  (38 - lat) * K,
-];
-
-// Simplified coastline (lon, lat), clockwise from Tangier.
-const AFRICA: [number, number][] = [
-  [-5.9, 35.8],
-  [-2, 35.1],
-  [1, 36.5],
-  [3, 36.8],
-  [8.6, 36.9],
-  [10.2, 37.2],
-  [11.1, 36.9],
-  [10.4, 36],
-  [11.1, 35.2],
-  [10, 34.2],
-  [11.5, 33.1],
-  [13.2, 32.9],
-  [15.2, 32.3],
-  [17, 31],
-  [19, 30.3],
-  [20.1, 31],
-  [20, 32.1],
-  [22, 32.9],
-  [23.9, 32],
-  [25.2, 31.6],
-  [29, 30.9],
-  [31, 31.6],
-  [32.3, 31.3],
-  [32.6, 29.9],
-  [33.9, 27.2],
-  [35.5, 24],
-  [36.9, 22],
-  [37.2, 19.6],
-  [38.5, 18],
-  [39.5, 15.5],
-  [41.2, 14],
-  [43.3, 12.5],
-  [44, 10.4],
-  [51.2, 11.8],
-  [51, 10.4],
-  [49.5, 6.5],
-  [48, 4.5],
-  [45.3, 2],
-  [42.5, -0.5],
-  [40, -3],
-  [39.3, -6.8],
-  [40.4, -10.5],
-  [40.6, -15],
-  [36.9, -17.9],
-  [35.4, -22],
-  [35.5, -24],
-  [32.9, -25.9],
-  [32.4, -28.5],
-  [31, -29.9],
-  [28, -32.9],
-  [25.6, -34],
-  [22, -34.2],
-  [20, -34.8],
-  [18.4, -34.3],
-  [18, -32],
-  [16.5, -28.6],
-  [15.2, -27],
-  [14.5, -22.9],
-  [11.8, -17.3],
-  [12.3, -14],
-  [13.4, -12.6],
-  [13.2, -8.8],
-  [12.3, -6],
-  [11.8, -4.8],
-  [8.8, -0.7],
-  [9.4, 0.4],
-  [9.6, 2.9],
-  [9.7, 4],
-  [8.5, 4.5],
-  [6, 4.3],
-  [5, 5.8],
-  [3.4, 6.4],
-  [1.2, 6.1],
-  [-2, 4.8],
-  [-4, 5.2],
-  [-7.5, 4.4],
-  [-11.5, 6.9],
-  [-13.2, 8.5],
-  [-15, 10.9],
-  [-16.8, 13.5],
-  [-17.5, 14.7],
-  [-16.5, 16],
-  [-16.1, 18],
-  [-17, 21],
-  [-15.9, 23.7],
-  [-12.9, 27.9],
-  [-9.8, 29.9],
-  [-9.6, 32.3],
-  [-6.8, 34],
-];
-const MADAGASCAR: [number, number][] = [
-  [49.3, -12],
-  [50.4, -15.5],
-  [49.5, -17.5],
-  [48, -21.5],
-  [47, -25],
-  [45.2, -25.6],
-  [43.7, -23.5],
-  [43.3, -21.5],
-  [44.4, -16.5],
-  [46.3, -15.7],
-  [48, -13.5],
-];
-const toPath = (pts: [number, number][]) =>
-  pts
-    .map(
-      ([lo, la], i) =>
-        `${i ? "L" : "M"}${proj(lo, la)
-          .map((v) => v.toFixed(1))
-          .join(" ")}`,
-    )
-    .join(" ") + " Z";
-
-const norm = (s: string) =>
-  s
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z]/g, "");
-
-const CENTROIDS: Record<string, [number, number]> = {
-  nigeria: [8.1, 9.6],
-  democraticrepublicofthecongo: [23.6, -2.9],
-  tanzania: [34.9, -6.4],
-  angola: [17.9, -12.3],
-  uganda: [32.4, 1.3],
-  kenya: [37.9, 0.2],
-  ghana: [-1, 7.9],
-  cameroon: [12.4, 5.7],
-  cotedivoire: [-5.5, 7.5],
-  mozambique: [35.5, -17.3],
-  niger: [8.1, 17.6],
-  mali: [-4, 17.6],
-  burkinafaso: [-1.6, 12.2],
-  guinea: [-10.9, 10.4],
-  benin: [2.3, 9.3],
-  togo: [0.9, 8.6],
-  sierraleone: [-11.8, 8.5],
-  liberia: [-9.4, 6.4],
-  senegal: [-14.5, 14.5],
-  gambia: [-15.3, 13.4],
-  guineabissau: [-15.2, 12],
-  chad: [18.7, 15.4],
-  sudan: [30.2, 15.6],
-  southsudan: [31.3, 7.3],
-  ethiopia: [39.5, 8.6],
-  somalia: [46.2, 5.2],
-  centralafricanrepublic: [20.9, 6.6],
-  congo: [15.8, -0.7],
-  gabon: [11.6, -0.8],
-  equatorialguinea: [10.3, 1.6],
-  zambia: [27.8, -13.1],
-  malawi: [34.3, -13.3],
-  zimbabwe: [29.2, -19],
-  madagascar: [46.9, -18.8],
-  rwanda: [29.9, -1.9],
-  burundi: [29.9, -3.4],
-  southafrica: [24, -29],
-  namibia: [18.5, -22.6],
-  botswana: [24.7, -22.3],
-  egypt: [30.8, 26.8],
-  libya: [17.2, 26.3],
-  algeria: [2.6, 28],
-  morocco: [-6, 31.8],
-  tunisia: [9.5, 34],
-  mauritania: [-10.9, 20.3],
-  eritrea: [38.8, 15.2],
-  djibouti: [42.6, 11.8],
-  eswatini: [31.5, -26.5],
-  lesotho: [28.2, -29.6],
-  saotomeandprincipe: [6.6, 0.3],
-  comoros: [43.3, -11.7],
+// Country outlines (Natural Earth 1:50m, pre-projected). Generated, not hand-drawn.
+type GeoCountry = {
+  name: string;
+  data: boolean;
+  d: string;
+  cx: number;
+  cy: number;
+  area: number;
 };
-const ALIASES: Record<string, string> = {
-  drc: "democraticrepublicofthecongo",
-  drcongo: "democraticrepublicofthecongo",
-  democraticrepublicofcongo: "democraticrepublicofthecongo",
-  congodemrep: "democraticrepublicofthecongo",
-  republicofthecongo: "congo",
-  congorep: "congo",
-  congobrazzaville: "congo",
-  ivorycoast: "cotedivoire",
-  unitedrepublicoftanzania: "tanzania",
-  thegambia: "gambia",
-  gambiathe: "gambia",
-  swaziland: "eswatini",
+const GEO = africaGeo as unknown as {
+  w: number;
+  h: number;
+  context: string;
+  countries: GeoCountry[];
 };
-function centroidFor(name: string): [number, number] | null {
-  const k = norm(name);
-  return CENTROIDS[k] ?? CENTROIDS[ALIASES[k] ?? ""] ?? null;
-}
 
-const HEAT_STEPS = ["#FA8072", "#E9967A", "#CD5C5C", "#B22222", "#8B0000"];
-const heatColor = (h: number) => HEAT_STEPS[clamp(Math.floor(h * 5), 0, 4)];
-const crescentR = (h: number) => 7 + Math.sqrt(clamp(h, 0, 1)) * 30;
-
-function crescentPath(cx: number, cy: number, r: number) {
-  const ri = r * 1.25;
-  return `M ${cx} ${cy - r} A ${r} ${r} 0 1 0 ${cx} ${cy + r} A ${ri} ${ri} 0 0 1 ${cx} ${cy - r} Z`;
-}
+// Five heat classes, like the reference map's legend: a country is filled with its class.
+const HEAT_CLASSES = [
+  { min: 0.4, label: "Very high", color: "#7A0000" },
+  { min: 0.2, label: "High", color: "#B22222" },
+  { min: 0.1, label: "Moderate", color: "#D96A5C" },
+  { min: 0.03, label: "Low", color: "#EFA48E" },
+  { min: 0, label: "Very low", color: "#F9DDD1" },
+];
+const heatClass = (h: number) =>
+  HEAT_CLASSES.find((c) => h >= c.min) ?? HEAT_CLASSES[HEAT_CLASSES.length - 1];
+const heatColor = (h: number) => heatClass(h).color;
 
 const fmtBig = (n: number) => {
   const a = Math.abs(n);
@@ -1273,6 +1096,39 @@ const fmtBig = (n: number) => {
   if (a >= 1e3) return `${(n / 1e3).toFixed(1)}k`;
   return String(Math.round(n));
 };
+
+/** A big number with its P10–P90 range underneath. */
+function Stat({
+  label,
+  p,
+  prefix = "",
+  suffix = "",
+  digits = 0,
+  tone,
+}: {
+  label: string;
+  p: Percentiles;
+  prefix?: string;
+  suffix?: string;
+  digits?: number;
+  tone?: "up" | "down";
+}) {
+  const f = (v: number) =>
+    digits ? `${v.toFixed(digits)}${suffix}` : `${fmtBig(v)}${suffix}`;
+  const sign = (v: number) => (v > 0 && prefix ? prefix : "");
+  return (
+    <div className={`stat ${tone ? `stat-${tone}` : ""}`}>
+      <span className="stat-label">{label}</span>
+      <b className="stat-value">
+        {sign(p.p50)}
+        {f(p.p50)}
+      </b>
+      <small className="stat-range">
+        likely {f(p.p10)} to {f(p.p90)}
+      </small>
+    </div>
+  );
+}
 
 /** History (solid) + projection (dashed, with P10–P90 band) for one country. */
 function TrendChart({
@@ -1284,19 +1140,21 @@ function TrendChart({
   path: YearPoint[];
   dataYear: number;
 }) {
-  const W = 360;
-  const H = 150;
-  const padL = 40;
-  const padB = 20;
-  const padT = 8;
+  const W = 400;
+  const H = 170;
+  const padL = 44;
+  const padB = 22;
+  const padT = 10;
   const all = [...history, ...path];
   const x0 = history[0]?.year ?? dataYear;
   const x1 = path[path.length - 1]?.year ?? dataYear;
   const yMax = niceCeil(Math.max(...all.map((p) => p.p90), 1));
-  const X = (yr: number) => padL + ((yr - x0) / (x1 - x0 || 1)) * (W - padL - 6);
+  const X = (yr: number) => padL + ((yr - x0) / (x1 - x0 || 1)) * (W - padL - 8);
   const Y = (v: number) => padT + (1 - v / yMax) * (H - padT - padB);
   const line = (pts: YearPoint[], k: "p10" | "p50" | "p90") =>
-    pts.map((p, i) => `${i ? "L" : "M"}${X(p.year).toFixed(1)} ${Y(p[k]).toFixed(1)}`).join(" ");
+    pts
+      .map((p, i) => `${i ? "L" : "M"}${X(p.year).toFixed(1)} ${Y(p[k]).toFixed(1)}`)
+      .join(" ");
   const band =
     path.length > 1
       ? `${line(path, "p90")} ${[...path]
@@ -1311,12 +1169,12 @@ function TrendChart({
       viewBox={`0 0 ${W} ${H}`}
       className="trend"
       role="img"
-      aria-label="Cases to date and projection"
+      aria-label="People living with SCD to date and projection"
     >
       {ticks.map((t) => (
         <g key={t}>
-          <line x1={padL} x2={W - 6} y1={Y(t)} y2={Y(t)} className="trend-grid" />
-          <text x={padL - 5} y={Y(t) + 3} textAnchor="end" className="trend-tick">
+          <line x1={padL} x2={W - 8} y1={Y(t)} y2={Y(t)} className="trend-grid" />
+          <text x={padL - 6} y={Y(t) + 3} textAnchor="end" className="trend-tick">
             {fmtBig(t)}
           </text>
         </g>
@@ -1329,7 +1187,7 @@ function TrendChart({
         <text
           key={`${yr}-${i}`}
           x={X(yr)}
-          y={H - 5}
+          y={H - 6}
           textAnchor={i === 0 ? "start" : i === 2 ? "end" : "middle"}
           className="trend-tick"
         >
@@ -1351,22 +1209,22 @@ function HotspotsPage({
   const [error, setError] = useState<string | null>(null);
   const [sel, setSel] = useState<string | null>(null);
   const [horizon, setHorizon] = useState(2035);
-  const [mortality, setMortality] = useState(0.7);
-  // Sliders move freely; the request is sent once they settle.
-  const [query, setQuery] = useState({ horizon: 2035, mortality: 0.7 });
+  // The slider moves freely; the request is sent once it settles.
+  const [query, setQuery] = useState(2035);
+  const [tip, setTip] = useState<{ name: string; x: number; y: number } | null>(
+    null,
+  );
+  const figRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    const t = window.setTimeout(
-      () => setQuery({ horizon, mortality }),
-      250,
-    );
+    const t = window.setTimeout(() => setQuery(horizon), 250);
     return () => window.clearTimeout(t);
-  }, [horizon, mortality]);
+  }, [horizon]);
 
   useEffect(() => {
     let live = true;
     setError(null);
-    getHotspots(query.horizon, query.mortality)
+    getHotspots(query)
       .then((d) => {
         if (!live) return;
         setData(d);
@@ -1378,285 +1236,187 @@ function HotspotsPage({
     };
   }, [query]);
 
-  const placed = useMemo(() => {
-    const items = data?.items ?? [];
-    const on: { it: HotspotItem; x: number; y: number }[] = [];
-    const off: HotspotItem[] = [];
-    items.forEach((it) => {
-      const c = centroidFor(it.country);
-      if (c) {
-        const [x, y] = proj(c[0], c[1]);
-        on.push({ it, x, y });
-      } else off.push(it);
-    });
-    on.sort((a, b) => a.it.heat - b.it.heat); // hottest drawn last, on top
-    return { on, off };
-  }, [data]);
-
+  const byName = useMemo(
+    () => new Map((data?.items ?? []).map((i) => [i.country, i])),
+    [data],
+  );
   const selected = data?.items.find((i) => i.country === sel) ?? null;
-  const top = new Set((data?.items ?? []).slice(0, 6).map((i) => i.country));
-  const ordered = data?.items ?? [];
+  const selectedGeo = GEO.countries.filter((g) => g.name === sel);
   const dataYear = data?.data_year ?? 2023;
-  const hz = data?.horizon ?? query.horizon;
+  const hz = data?.horizon ?? query;
 
-  const totalDeaths = useMemo(() => {
-    const items = data?.items ?? [];
-    // Sum of medians: indicative only; P10/P90 of a sum are not the sum of P10/P90.
-    return items.reduce((a, i) => a + i.deaths_cumulative.p50, 0);
-  }, [data]);
+  const showTip = (e: ReactMouseEvent, name: string) => {
+    const r = figRef.current?.getBoundingClientRect();
+    if (r) setTip({ name, x: e.clientX - r.left, y: e.clientY - r.top });
+  };
 
   return (
-    <>
-      <section className="hero hero-left">
-        <p className="eyebrow">
-          Africa · GBD cases {dataYear} · projected to {hz}
-        </p>
-        <h1 className="hero-title">
-          Where sickle cell is <em>concentrated</em>, and where it is{" "}
-          <em>heading</em>
-        </h1>
-        <p className="hero-sub">
-          Each crescent sits on a country. The bigger and darker it is, the more
-          people live with SCD and the more children are projected to die before
-          their fifth birthday if nothing changes. Click one for the detail.
-        </p>
-        <div className="hero-actions">
-          <button className="btn" onClick={onBlank}>
-            Go to the next page →
-          </button>
-        </div>
-      </section>
-
-      <section className="hot-dials" aria-label="Projection settings">
-        <Dial
-          label="Look ahead to"
-          value={horizon}
-          min={2025}
-          max={2050}
-          step={1}
-          format={(v) => String(v)}
-          hint="Cases follow each country's own 2009–2023 trend, with the trend itself uncertain."
-          onChange={setHorizon}
-        />
-        <Dial
-          label="Child deaths before age 5 without early care"
-          value={mortality}
-          min={0.5}
-          max={0.9}
-          step={0.01}
-          format={(v) => pct(v)}
-          hint="Most likely value; range 50–90% (Grosse 2011, weak data)."
-          onChange={setMortality}
-        />
-      </section>
-
-      {error && <div className="alert">Couldn't load hotspots: {error}</div>}
-      {!data && !error && <p className="fine">Running the projection…</p>}
-
-      {data && (
-        <p className="topline">
-          Across the {data.items.length} countries, roughly{" "}
-          <b>{fmtBig(totalDeaths)}</b> children could die before age 5 between{" "}
-          {dataYear + 1} and {hz} without early diagnosis and care
-          <small> (sum of country medians; modelled, not observed)</small>
-        </p>
-      )}
-
-      <div className="atlas">
-        <figure className="map-card">
-          <svg
-            viewBox="0 0 590 600"
-            className="map"
-            role="img"
-            aria-label="Map of Africa with SCD hotspot crescents"
-          >
-            {[23.4, 0, -23.4].map((lat) => {
-              const y = proj(0, lat)[1];
-              return (
-                <g key={lat} className="graticule">
-                  <line x1="0" x2="590" y1={y} y2={y} />
-                  <text x="586" y={y - 5} textAnchor="end">
-                    {lat === 0
-                      ? "Equator"
-                      : lat > 0
-                        ? "Tropic of Cancer"
-                        : "Tropic of Capricorn"}
-                  </text>
-                </g>
-              );
-            })}
-            <path d={toPath(AFRICA)} className="land" />
-            <path d={toPath(MADAGASCAR)} className="land" />
-            {placed.on.map(({ it, x, y }) => {
-              const r = crescentR(it.heat);
-              const isSel = it.country === sel;
-              return (
-                <g
-                  key={it.country}
-                  className={`spot ${isSel ? "is-sel" : ""} ${it.heat > 0.6 ? "is-hot" : ""}`}
-                  onClick={() => setSel(it.country)}
-                  onMouseEnter={() => setSel(it.country)}
-                  tabIndex={0}
-                  role="button"
-                  aria-label={`${it.country}, heat ${Math.round(it.heat * 100)}`}
-                  onKeyDown={(e) => e.key === "Enter" && setSel(it.country)}
-                >
-                  <path
-                    d={crescentPath(x, y, r)}
-                    fill={heatColor(it.heat)}
-                    className="crescent"
-                  />
-                  <circle cx={x} cy={y} r={3.2} className="spot-dot" />
-                  {(top.has(it.country) || isSel) && (
-                    <text x={x + r * 0.55 + 6} y={y + 4} className="spot-label">
-                      {it.country}
-                    </text>
-                  )}
-                </g>
-              );
-            })}
-          </svg>
-          <figcaption className="legend">
-            <span className="legend-sizes">
-              {[0.1, 0.45, 0.9].map((h) => {
-                const r = crescentR(h);
-                return (
-                  <svg
-                    key={h}
-                    width={r * 2 + 4}
-                    height={r * 2 + 4}
-                    viewBox={`0 0 ${r * 2 + 4} ${r * 2 + 4}`}
-                  >
-                    <path
-                      d={crescentPath(r + 2, r + 2, r)}
-                      fill={heatColor(h)}
-                    />
-                  </svg>
-                );
-              })}
-              <span>cooler → hotter</span>
-            </span>
-            <span className="legend-ramp">
-              {HEAT_STEPS.map((c) => (
-                <i key={c} style={{ background: c }} />
-              ))}
-            </span>
-          </figcaption>
-        </figure>
-
-        <aside className="atlas-side">
-          {selected && (
-            <article className="dossier">
-              <p className="eyebrow">Selected</p>
-              <h2>{selected.country}</h2>
-              <div className="heat-meter">
-                <span
-                  style={{
-                    width: `${Math.round(selected.heat * 100)}%`,
-                    background: heatColor(selected.heat),
-                  }}
-                />
-                <b>{Math.round(selected.heat * 100)}</b>
-              </div>
-              <TrendChart
-                history={selected.history}
-                path={selected.path}
-                dataYear={dataYear}
+    <div className="atlas">
+      <figure className="map-card" ref={figRef}>
+        <svg
+          viewBox={`0 0 ${GEO.w} ${GEO.h}`}
+          className="map"
+          role="img"
+          aria-label="Map of Africa, each country shaded by sickle cell heat"
+          onMouseLeave={() => setTip(null)}
+        >
+          <rect width={GEO.w} height={GEO.h} className="sea" />
+          <path d={GEO.context} className="ctx" />
+          {GEO.countries.map((g, i) => {
+            const it = byName.get(g.name);
+            return (
+              <path
+                key={`${g.name}-${i}`}
+                d={g.d}
+                className={`ctry ${it ? "has-data" : "no-data"}`}
+                style={it ? { fill: heatColor(it.heat) } : undefined}
+                onClick={() => it && setSel(g.name)}
+                onMouseMove={(e) => showTip(e, g.name)}
+                tabIndex={it ? 0 : -1}
+                role={it ? "button" : undefined}
+                aria-label={
+                  it ? `${g.name}, ${heatClass(it.heat).label}` : undefined
+                }
+                onKeyDown={(e) => it && e.key === "Enter" && setSel(g.name)}
               />
-              <p className="trend-key">
-                <i className="k-hist" /> GBD estimate
-                <i className="k-proj" /> projection (P10–P90 shaded)
-              </p>
-              <dl className="facts">
-                <Fact
-                  k={`People with SCD, ${dataYear}`}
-                  p={selected.cases_now}
-                  big
-                />
-                <Fact
-                  k={`People with SCD, ${hz}`}
-                  p={selected.cases_horizon}
-                  big
-                />
-                <Fact
-                  k="Yearly growth"
-                  p={selected.growth_pct_per_year}
-                  suffix="%"
-                />
-                <Fact
-                  k={`Babies born with SCD / yr, ${hz}`}
-                  p={selected.births_per_year_horizon}
-                  big
-                />
-                <Fact
-                  k={`Child deaths / yr by ${hz}, no early care`}
-                  p={selected.deaths_per_year_horizon}
-                  big
-                />
-                <Fact
-                  k={`Child deaths ${dataYear + 1}–${hz}, no early care`}
-                  p={selected.deaths_cumulative}
-                  big
-                />
-              </dl>
-              <button className="btn" onClick={() => onOpen(selected.country)}>
-                Stress-test {selected.country}'s blood stock →
-              </button>
-            </article>
-          )}
-
-          <ol className="rank">
-            {ordered.map((it, i) => (
-              <li key={it.country}>
-                <button
-                  className={`rank-row ${it.country === sel ? "is-sel" : ""}`}
-                  onClick={() => setSel(it.country)}
-                >
-                  <span className="rank-n">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <span className="rank-name">{it.country}</span>
-                  <span className="rank-bar">
-                    <i
-                      style={{
-                        width: `${Math.round(it.heat * 100)}%`,
-                        background: heatColor(it.heat),
-                      }}
-                    />
-                  </span>
-                  <span className="rank-v">{Math.round(it.heat * 100)}</span>
-                </button>
-              </li>
+            );
+          })}
+          {/* Small island states are too small to see as shapes: add a marker. */}
+          {GEO.countries
+            .filter((g) => g.area < 20 && byName.has(g.name))
+            .map((g) => (
+              <circle
+                key={`dot-${g.name}`}
+                cx={g.cx}
+                cy={g.cy}
+                r={5}
+                className="island"
+                style={{ fill: heatColor(byName.get(g.name)!.heat) }}
+                onClick={() => setSel(g.name)}
+                onMouseMove={(e) => showTip(e, g.name)}
+              />
             ))}
-          </ol>
-          {placed.off.length > 0 && (
-            <p className="fine">
-              Not drawn on the map (island states or unrecognised names), still
-              ranked: {placed.off.map((i) => i.country).join(", ")}
-            </p>
-          )}
-        </aside>
-      </div>
+          {selectedGeo.map((g, i) => (
+            <path key={`sel-${i}`} d={g.d} className="ctry-sel" />
+          ))}
+        </svg>
+        {tip && (
+          <div className="map-tip" style={{ left: tip.x, top: tip.y }}>
+            <b>{tip.name}</b>
+            {byName.get(tip.name) ? (
+              <span>
+                {heatClass(byName.get(tip.name)!.heat).label} ·{" "}
+                {fmtBig(byName.get(tip.name)!.cases_now.p50)} people today
+              </span>
+            ) : (
+              <span>No data</span>
+            )}
+          </div>
+        )}
+        <figcaption className="legend">
+          {HEAT_CLASSES.slice()
+            .reverse()
+            .map((c) => (
+              <span key={c.label} className="legend-item">
+                <i style={{ background: c.color }} />
+                {c.label}
+              </span>
+            ))}
+          <span className="legend-item">
+            <i className="legend-nodata" />
+            No data
+          </span>
+        </figcaption>
+      </figure>
 
-      <section className="assume">
-        <h3>How this is worked out</h3>
-        <p>
-          <b>Observed:</b> number of people with sickle cell disorders per
-          country, 1996–{dataYear} (Global Burden of Disease, with its 95%
-          interval). <b>Heading:</b> a straight-line trend in the logarithm of
-          that series over the last 15 years, extended to {hz}. The trend's
-          slope is treated as uncertain, so every figure is a P10 / P50 / P90
-          range. <b>Child deaths:</b> babies born with SCD each year (an{" "}
-          <i>assumption</i>: 3–9% of people living with SCD, most likely 5%) ×
-          the share who die before age 5 without diagnosis and care (50–90%,
-          Grosse et al. 2011, flagged there as weak data). <b>Heat</b> = ½
-          current cases + ½ projected child deaths, each scaled to the
-          highest country, then square-rooted so mid-sized countries stay
-          visible. Modelled estimates, not observations. Not a medical device;
-          no clinical advice.
-        </p>
-      </section>
-    </>
+      <aside className="atlas-side">
+        {error && <div className="alert">Couldn't load hotspots: {error}</div>}
+        {!selected && !error && <p className="fine">Loading…</p>}
+        {selected && (
+          <article className="country">
+            <header className="country-head">
+              <div>
+                <p className="eyebrow">Sickle cell disease</p>
+                <h2>{selected.country}</h2>
+              </div>
+              <span
+                className="pill"
+                style={{ background: heatColor(selected.heat) }}
+              >
+                {heatClass(selected.heat).label}
+              </span>
+            </header>
+
+            <div className="stat-pair">
+              <Stat label={`People living with SCD, ${dataYear}`} p={selected.cases_now} />
+              <Stat label={`Expected by ${hz}`} p={selected.cases_horizon} />
+            </div>
+
+            <TrendChart
+              history={selected.history}
+              path={selected.path}
+              dataYear={dataYear}
+            />
+            <p className="trend-key">
+              <span>
+                <i className="k-hist" />
+                Measured
+              </span>
+              <span>
+                <i className="k-proj" />
+                Projected, shaded range
+              </span>
+            </p>
+
+            <Dial
+              label="Look ahead to"
+              value={horizon}
+              min={2025}
+              max={2050}
+              step={1}
+              format={(v) => String(v)}
+              onChange={setHorizon}
+            />
+
+            <dl className="rows">
+              <div>
+                <dt>Change by {hz}</dt>
+                <dd>
+                  {selected.change.p50 >= 0 ? "+" : "−"}
+                  {fmtBig(Math.abs(selected.change.p50))}
+                  <small>
+                    {" "}
+                    ({selected.growth_pct_per_year.p50 >= 0 ? "+" : "−"}
+                    {Math.abs(selected.growth_pct_per_year.p50).toFixed(1)}% a
+                    year)
+                  </small>
+                </dd>
+              </div>
+              <div>
+                <dt>Newborns with SCD a year, {hz}</dt>
+                <dd>
+                  {fmtBig(selected.births_per_year_horizon.p50)}
+                  <small>
+                    {" "}
+                    ({fmtBig(selected.births_per_year_horizon.p10)}–
+                    {fmtBig(selected.births_per_year_horizon.p90)})
+                  </small>
+                </dd>
+              </div>
+            </dl>
+
+            <p className="country-note">
+              Modelled estimates with a likely range, not observations. Newborns
+              are the children early screening could reach.
+            </p>
+
+            <button className="btn" onClick={onBlank}>
+              Next page →
+            </button>
+          </article>
+        )}
+      </aside>
+    </div>
   );
 }
 

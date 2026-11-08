@@ -1,5 +1,5 @@
 """Africa SCD hotspots: where cases are concentrated, where they are heading, and how
-many young children could die without early diagnosis and care.
+many newborns each year could be reached by early screening and care.
 
 Reads data/raw.csv (GBD sickle cell disorders prevalence, number of people, all ages,
 by country and year, with a 95% uncertainty interval). Every output is MODELLED and
@@ -31,11 +31,6 @@ SLOPE_SD_FLOOR = 0.006
 # Rough calibration: Piel et al. 2013 put Nigeria at roughly 90,000 SCA births in 2010
 # against ~1.9M GBD prevalent cases (~0.05); other countries differ with survival.
 BIRTH_FRACTION = (0.03, 0.05, 0.09)  # min / mode / max
-
-# Share of children born with SCA in Africa who die before age 5 without diagnosis and
-# care. Grosse et al. 2011: 50%-90%; the authors flag weak data, so this stays wide.
-U5_MORTALITY_BOUNDS = (0.50, 0.90)
-DEFAULT_U5_MORTALITY_MODE = 0.70
 
 MIN_HORIZON, MAX_HORIZON = 2025, 2050
 DEFAULT_HORIZON = 2035
@@ -79,9 +74,7 @@ def _tri(rng: np.random.Generator, lo: float, mode: float, hi: float, n: int) ->
     return rng.triangular(lo, mode, hi, n)
 
 
-def _project_country(
-    s: Series, horizon: int, u5_mode: float, rng: np.random.Generator
-) -> dict:
+def _project_country(s: Series, horizon: int, rng: np.random.Generator) -> dict:
     n = N_DRAWS
     last = int(s.years[-1])
     steps = max(horizon - last, 0)
@@ -106,7 +99,6 @@ def _project_country(
     slopes = rng.normal(slope, slope_sd, n)
 
     births_frac = _tri(rng, *BIRTH_FRACTION, n)
-    mortality = _tri(rng, U5_MORTALITY_BOUNDS[0], u5_mode, U5_MORTALITY_BOUNDS[1], n)
 
     # cases[t] for every year after the last data year, all draws at once.
     ks = np.arange(1, steps + 1, dtype=float)[:, None]
@@ -117,9 +109,6 @@ def _project_country(
         for t in range(steps + 1)
     ]
     cases_h = cases[-1] if steps else base
-    deaths_per_case = births_frac * mortality
-    deaths_year_h = cases_h * deaths_per_case
-    deaths_cum = cases.sum(axis=0) * deaths_per_case
 
     return {
         "country": s.country,
@@ -130,35 +119,30 @@ def _project_country(
         "cases_now": _pct(base),
         "cases_horizon": _pct(cases_h),
         "growth_pct_per_year": _pct((np.exp(slopes) - 1) * 100),
+        "change": _pct(cases_h - base),
         "births_per_year_horizon": _pct(cases_h * births_frac),
-        "deaths_per_year_horizon": _pct(deaths_year_h),
-        "deaths_cumulative": _pct(deaths_cum),
         "path": path,
     }
 
 
 @lru_cache(maxsize=64)
-def compute_hotspots(horizon: int = DEFAULT_HORIZON, u5_mortality: float = DEFAULT_U5_MORTALITY_MODE) -> dict:
+def compute_hotspots(horizon: int = DEFAULT_HORIZON) -> dict:
     horizon = int(min(max(horizon, MIN_HORIZON), MAX_HORIZON))
-    u5 = float(min(max(u5_mortality, U5_MORTALITY_BOUNDS[0]), U5_MORTALITY_BOUNDS[1]))
     rng = np.random.default_rng(SEED)
     items = [
-        _project_country(s, horizon, u5, rng) for s in sorted(load_series().values(), key=lambda s: s.country)
+        _project_country(s, horizon, rng)
+        for s in sorted(load_series().values(), key=lambda s: s.country)
     ]
 
-    # Heat: half current burden, half projected child deaths, each scaled to the worst
-    # country, then square-rooted so mid-sized countries stay visible next to Nigeria.
+    # Heat: half people living with SCD today, half the extra people expected to need
+    # care by the horizon (growth only; shrinking countries count as zero), each scaled
+    # to the highest country, then square-rooted so mid-sized countries stay visible.
     c_max = max((i["cases_now"]["p50"] for i in items), default=1) or 1
-    d_max = max((i["deaths_cumulative"]["p50"] for i in items), default=1) or 1
+    g_max = max((max(i["change"]["p50"], 0.0) for i in items), default=1) or 1
     for i in items:
-        raw = 0.5 * i["cases_now"]["p50"] / c_max + 0.5 * i["deaths_cumulative"]["p50"] / d_max
+        raw = 0.5 * i["cases_now"]["p50"] / c_max + 0.5 * max(i["change"]["p50"], 0.0) / g_max
         i["heat"] = float(np.sqrt(raw))
     items.sort(key=lambda i: i["heat"], reverse=True)
 
     last_year = int(next(iter(load_series().values())).years[-1])
-    return {
-        "data_year": last_year,
-        "horizon": horizon,
-        "u5_mortality_mode": u5,
-        "items": items,
-    }
+    return {"data_year": last_year, "horizon": horizon, "items": items}

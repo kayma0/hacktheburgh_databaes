@@ -56,17 +56,11 @@ def test_hotspots_shape_and_ordering():
     assert items[0]["country"] == "Nigeria"
     assert [i["heat"] for i in items] == sorted((i["heat"] for i in items), reverse=True)
     for it in items:
-        for k in ("cases_now", "cases_horizon", "deaths_per_year_horizon", "deaths_cumulative"):
+        for k in ("cases_now", "cases_horizon", "change", "births_per_year_horizon"):
             p = it[k]
             assert p["p10"] <= p["p50"] <= p["p90"]
         assert it["path"][0]["year"] == 2023 and it["path"][-1]["year"] == 2035
         assert it["history"][0]["year"] == 1996
-
-
-def test_hotspots_more_mortality_means_more_deaths():
-    lo = client.get("/api/hotspots", params={"u5_mortality": 0.5}).json()["items"][0]
-    hi = client.get("/api/hotspots", params={"u5_mortality": 0.9}).json()["items"][0]
-    assert hi["deaths_cumulative"]["p50"] > lo["deaths_cumulative"]["p50"]
 
 
 def test_hotspots_rejects_out_of_range_horizon():

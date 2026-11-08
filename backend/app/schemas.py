@@ -73,13 +73,12 @@ class HistoryPoint(BaseModel):
 class HotspotItem(BaseModel):
     country: str
     heat: float = Field(
-        description="0-1 composite of current burden and projected child deaths")
+        description="0-1 composite of current cases and expected growth in cases")
     cases_now: Percentiles
     cases_horizon: Percentiles
     growth_pct_per_year: Percentiles
+    change: Percentiles
     births_per_year_horizon: Percentiles
-    deaths_per_year_horizon: Percentiles
-    deaths_cumulative: Percentiles
     history: list[HistoryPoint]
     path: list[HistoryPoint]
 
@@ -87,7 +86,6 @@ class HotspotItem(BaseModel):
 class HotspotsResponse(BaseModel):
     data_year: int
     horizon: int
-    u5_mortality_mode: float
     items: list[HotspotItem]
 
 

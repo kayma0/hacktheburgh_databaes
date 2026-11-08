@@ -102,13 +102,10 @@ def simulate(req: SimulateRequest):
 def hotspots(
     horizon: int = Query(hotspots_mod.DEFAULT_HORIZON,
                          ge=hotspots_mod.MIN_HORIZON, le=hotspots_mod.MAX_HORIZON),
-    u5_mortality: float = Query(hotspots_mod.DEFAULT_U5_MORTALITY_MODE,
-                                ge=hotspots_mod.U5_MORTALITY_BOUNDS[0],
-                                le=hotspots_mod.U5_MORTALITY_BOUNDS[1]),
 ):
-    """Every country from data/raw.csv: burden now, projected to `horizon`, and the
-    under-5 deaths expected without early diagnosis and care."""
-    return hotspots_mod.compute_hotspots(horizon, u5_mortality)
+    """Every country from data/raw.csv: people living with SCD now, projected to
+    `horizon`, and the newborns per year who could be reached by early screening."""
+    return hotspots_mod.compute_hotspots(horizon)
 
 
 @app.post("/api/briefing", response_model=BriefingResponse)
