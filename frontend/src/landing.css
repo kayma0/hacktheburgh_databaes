@@ -1,0 +1,501 @@
+/* Landing page. Uses the app's palette and fonts (see index.css :root). */
+
+.lp {
+  --px: 0;
+  --py: 0;
+  position: relative;
+  min-height: 100vh;
+  min-height: 100svh;
+  overflow: hidden;
+  isolation: isolate;
+  color: var(--ink);
+  background:
+    radial-gradient(1000px 640px at 12% 14%, rgba(255, 255, 255, 0.9), transparent 62%),
+    radial-gradient(900px 620px at 92% 92%, rgba(250, 128, 114, 0.13), transparent 64%),
+    linear-gradient(135deg, #fffafa 0%, #fff1ef 55%, #fde4e0 100%);
+  animation: lp-in 0.7s ease both;
+}
+.lp::before {
+  /* the app's dotted paper, as faint light dots */
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: radial-gradient(circle at 1px 1px, rgba(178, 34, 34, 0.09) 1px, transparent 0) 0 0 / 24px 24px;
+  mask-image: radial-gradient(ellipse at 30% 40%, #000 20%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse at 30% 40%, #000 20%, transparent 75%);
+  pointer-events: none;
+}
+.lp.is-leaving {
+  animation: lp-out 0.42s ease forwards;
+  pointer-events: none;
+}
+.lp-splash {
+  display: grid;
+  place-items: center;
+}
+.lp-splash-mark {
+  width: 96px;
+  animation: lp-float 1.6s ease-in-out infinite;
+}
+
+.lp-glow {
+  /* soft light that follows the cursor */
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      520px circle at calc(50% + var(--px) * 38%) calc(50% + var(--py) * 38%),
+      rgba(250, 128, 114, 0.2),
+      transparent 70%
+    );
+}
+
+/* ── layout ─────────────────────────────── */
+
+.lp-wrap {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(330px, 440px);
+  gap: clamp(32px, 6vw, 96px);
+  align-items: center;
+  max-width: 1240px;
+  min-height: 100vh;
+  min-height: 100svh;
+  margin: 0 auto;
+  padding: clamp(28px, 6vh, 64px) 28px 130px;
+}
+
+.lp-rise {
+  opacity: 0;
+  animation: lp-rise 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+
+/* ── hero ─────────────────────────────── */
+
+.lp-brand {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  margin-bottom: clamp(18px, 4vh, 36px);
+}
+.lp-logo {
+  position: relative;
+  flex: none;
+  width: clamp(150px, 19vw, 270px);
+  aspect-ratio: 1056 / 880;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  perspective: 700px;
+  -webkit-tap-highlight-color: transparent;
+}
+.lp-logo-svg {
+  position: relative;
+  display: block;
+  width: 100%;
+  overflow: visible;
+  transform: rotateY(calc(var(--px) * 16deg)) rotateX(calc(var(--py) * -12deg));
+  transition: transform 0.18s ease-out;
+  filter: drop-shadow(0 12px 26px rgba(216, 31, 58, 0.35));
+  animation: lp-float 5s ease-in-out infinite;
+}
+.lp-arc {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+.lp-arc-1 {
+  animation: lp-arc 3.2s ease-in-out infinite 0.3s;
+}
+.lp-arc-2 {
+  animation: lp-arc 3.2s ease-in-out infinite;
+}
+.lp-drop {
+  transform-box: fill-box;
+  transform-origin: 50% 70%;
+}
+.lp-drop.is-thump {
+  animation: lp-thump 0.6s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+.lp-name {
+  font-family: var(--display);
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+.lp-name em,
+.lp-slogan em {
+  font-style: italic;
+  font-weight: 700;
+  color: var(--firebrick);
+}
+
+.lp-slogan {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(1.9rem, 3.7vw, 3.3rem);
+  line-height: 0.98;
+  letter-spacing: -0.025em;
+}
+.lp-slogan span {
+  display: block;
+}
+.lp-slogan-2 em {
+  background: linear-gradient(100deg, #8b0000 0%, #d81f3a 45%, #e9674f 70%, #8b0000 100%);
+  background-size: 240% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: lp-shine 5s ease-in-out infinite;
+}
+
+
+
+/* ── sign-in card ─────────────────────────────── */
+
+.lp-card {
+  --cx: 50%;
+  --cy: 0%;
+  position: relative;
+  overflow: hidden;
+  padding: 26px 26px 20px;
+  border-radius: 22px;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--rule);
+  box-shadow:
+    0 30px 70px rgba(139, 0, 0, 0.16),
+    0 2px 6px rgba(139, 0, 0, 0.08);
+  transform: perspective(1100px) rotateY(calc(var(--px) * -5deg)) rotateX(calc(var(--py) * 4deg));
+  transition: transform 0.2s ease-out;
+}
+.lp-card::before {
+  /* red top edge */
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 5px;
+  background: linear-gradient(90deg, var(--oxblood), var(--firebrick), var(--salmon));
+}
+.lp-card::after {
+  /* spotlight under the cursor */
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(280px circle at var(--cx) var(--cy), rgba(250, 128, 114, 0.26), transparent 62%);
+}
+.lp-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.lp-tabs {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 6px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--paper-2);
+}
+.lp-tabs::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc(50% - 4px);
+  border-radius: 999px;
+  background: var(--card);
+  box-shadow: 0 2px 8px rgba(139, 0, 0, 0.2);
+  transition: transform 0.28s cubic-bezier(0.4, 1.3, 0.5, 1);
+}
+.lp-tabs[data-tab="up"]::before {
+  transform: translateX(100%);
+}
+.lp-tabs button {
+  position: relative;
+  padding: 9px 0;
+  border: 0;
+  background: none;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.lp-tabs button.is-on {
+  color: var(--oxblood);
+}
+
+.lp-card-title {
+  margin: 22px 0 4px;
+  font-family: var(--display);
+  font-size: 1.85rem;
+  font-weight: 800;
+  line-height: 1.1;
+  animation: lp-rise 0.4s ease both;
+}
+.lp-card-sub {
+  margin: 0 0 18px;
+  font-size: 0.93rem;
+  color: var(--ink-soft);
+}
+
+.lp-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 13px 16px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  overflow: hidden;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+.lp-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+.lp-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.lp-btn:focus-visible,
+.lp-tabs button:focus-visible,
+.lp-logo:focus-visible {
+  outline: 3px solid var(--salmon);
+  outline-offset: 3px;
+}
+.lp-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.lp-btn-main {
+  color: var(--paper);
+  background: linear-gradient(135deg, var(--oxblood), var(--firebrick));
+  box-shadow: 0 10px 24px rgba(139, 0, 0, 0.35);
+}
+.lp-btn-main:hover:not(:disabled) {
+  box-shadow: 0 14px 30px rgba(139, 0, 0, 0.5);
+}
+.lp-btn-main::after {
+  /* a sheen that sweeps across on hover */
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -60%;
+  width: 40%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transform: skewX(-20deg);
+  transition: left 0.6s ease;
+}
+.lp-btn-main:hover:not(:disabled)::after {
+  left: 130%;
+}
+.lp-btn-google {
+  color: var(--ink);
+  background: #fff;
+  border-color: var(--rule);
+}
+.lp-btn-google:hover:not(:disabled) {
+  border-color: var(--firebrick);
+  box-shadow: 0 8px 18px rgba(139, 0, 0, 0.14);
+}
+
+.lp-or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.lp-or::before,
+.lp-or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--rule);
+}
+
+
+/* ── heartbeat + footer ─────────────────────────────── */
+
+.lp-ecg {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 44px;
+  z-index: 1;
+  width: 100%;
+  height: 72px;
+  pointer-events: none;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.lp-ecg-base {
+  stroke: rgba(178, 34, 34, 0.2);
+  stroke-width: 1.5;
+}
+.lp-ecg-pulse {
+  stroke: #d81f3a;
+  stroke-width: 2.5;
+  stroke-dasharray: 150 1050;
+  filter: drop-shadow(0 0 5px rgba(216, 31, 58, 0.55));
+  animation: lp-trace 3.4s linear infinite;
+}
+.lp-foot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  padding: 12px 20px 14px;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  opacity: 0.75;
+}
+
+/* ── motion ─────────────────────────────── */
+
+@keyframes lp-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes lp-out {
+  to {
+    opacity: 0;
+    transform: scale(1.04);
+    filter: blur(8px);
+  }
+}
+@keyframes lp-rise {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes lp-float {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -8px;
+  }
+}
+@keyframes lp-arc {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(1.05);
+  }
+}
+@keyframes lp-thump {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.28, 0.86);
+  }
+  65% {
+    transform: scale(0.92, 1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes lp-shine {
+  0%,
+  100% {
+    background-position: 0% 0;
+  }
+  50% {
+    background-position: 100% 0;
+  }
+}
+@keyframes lp-trace {
+  from {
+    stroke-dashoffset: 150;
+  }
+  to {
+    stroke-dashoffset: -1050;
+  }
+}
+
+/* ── small screens ─────────────────────────────── */
+
+@media (max-width: 940px) {
+  .lp-glow {
+    background: radial-gradient(520px circle at 50% 30%, rgba(250, 128, 114, 0.18), transparent 70%);
+  }
+  .lp-wrap {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: center;
+    gap: 32px;
+    padding-top: 32px;
+  }
+  .lp-card {
+    max-width: 480px;
+    transform: none;
+  }
+}
+@media (max-width: 520px) {
+  .lp-tabs button {
+    font-size: 0.8rem;
+  }
+  .lp-wrap {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .lp-brand {
+    gap: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp,
+  .lp * {
+    animation: none !important;
+    transition: none !important;
+  }
+  .lp-rise {
+    opacity: 1;
+  }
+}

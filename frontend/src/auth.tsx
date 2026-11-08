@@ -35,9 +35,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/** Remembers that a signed-out visitor chose "explore as a guest" for this browser tab. */
-export const ENTERED_KEY = "sicklesignal.entered";
-
 export interface LoginOptions {
   /** Open Auth0's sign-up form instead of the log-in form. */
   signup?: boolean;
@@ -82,14 +79,7 @@ export function useAuth(): AuthApi {
           ...(o?.connection ? { connection: o.connection } : {}),
         },
       }),
-    logout: () => {
-      try {
-        sessionStorage.removeItem(ENTERED_KEY);
-      } catch {
-        /* private window: nothing to forget */
-      }
-      void a.logout({ logoutParams: { returnTo: window.location.origin } });
-    },
+    logout: () => void a.logout({ logoutParams: { returnTo: window.location.origin } }),
     getToken: async () => {
       try {
         return await a.getAccessTokenSilently();
