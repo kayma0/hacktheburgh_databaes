@@ -6,7 +6,7 @@ ranges (P10/P50/P90) — see [docs/METHOD.md](docs/METHOD.md) for sources and as
 
 Not a medical device. No clinical advice. Aggregate data only.
 
-##Live demo
+## Live demo
 
 You can access our live demo until 7.12.2026:
 https://hacktheburghdatabaes-production.up.railway.app/
