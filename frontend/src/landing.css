@@ -59,7 +59,7 @@
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(330px, 440px);
+  grid-template-columns: minmax(0, 1.45fr) minmax(330px, 440px);
   gap: clamp(32px, 6vw, 96px);
   align-items: center;
   max-width: 1240px;
@@ -76,16 +76,24 @@
 
 /* ── hero ─────────────────────────────── */
 
+.lp-hero {
+  /* logo, name and slogan: one centred stack */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
 .lp-brand {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 22px;
-  margin-bottom: clamp(18px, 4vh, 36px);
+  gap: clamp(10px, 2vh, 18px);
+  margin-bottom: clamp(14px, 3vh, 26px);
 }
 .lp-logo {
   position: relative;
   flex: none;
-  width: clamp(150px, 19vw, 270px);
+  width: clamp(230px, min(34vw, 55vh * 1.2), 520px);
   aspect-ratio: 1056 / 880;
   padding: 0;
   border: 0;
@@ -124,7 +132,7 @@
 
 .lp-name {
   font-family: var(--display);
-  font-size: clamp(2rem, 4vw, 3rem);
+  font-size: clamp(2.3rem, min(4.5vw, 6.2vh), 3.8rem);
   font-weight: 800;
   line-height: 1;
   letter-spacing: -0.01em;
@@ -140,12 +148,16 @@
   margin: 0;
   font-family: var(--display);
   font-weight: 800;
-  font-size: clamp(1.9rem, 3.7vw, 3.3rem);
-  line-height: 0.98;
-  letter-spacing: -0.025em;
+  font-size: clamp(0.98rem, min(1.8vw, 2.5vh), 1.55rem);
+  line-height: 1.2;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
 }
 .lp-slogan span {
-  display: block;
+  display: inline-block;
+}
+.lp-slogan span + span {
+  margin-left: 0.3em;
 }
 .lp-slogan-2 em {
   background: linear-gradient(100deg, #8b0000 0%, #d81f3a 45%, #e9674f 70%, #8b0000 100%);
@@ -484,8 +496,8 @@
     padding-left: 16px;
     padding-right: 16px;
   }
-  .lp-brand {
-    gap: 14px;
+  .lp-slogan {
+    font-size: clamp(0.9rem, 4.6vw, 1.2rem);
   }
 }
 
