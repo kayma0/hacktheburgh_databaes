@@ -147,6 +147,10 @@ export interface CrisisGroup {
   stock_at_start: number;
   /** Days until normal use alone empties this group's stock; null if never. */
   runs_dry_after_days: number | null;
+  /** Extra donors of this group to recruit before the window (covers 90% of runs). */
+  donors_to_cover: number;
+  /** Median day this group's first patient goes without, where one does. */
+  deadline_day: number | null;
 }
 
 export interface CrisisResponse {
@@ -189,6 +193,11 @@ export interface CrisisResponse {
   o_neg_patients_helped: number;
   /** Units crisis patients took from other hospital patients (crisis-first on). */
   routine_displaced_units: Percentiles;
+  /** Median day the first patient goes without blood, in runs where anyone does. */
+  first_short_day: number | null;
+  share_runs_with_shortage: number;
+  donors_to_cover_total: number;
+  cover_share: number;
 }
 
 export interface CrisisOptions {
@@ -459,4 +468,33 @@ export function getBriefing(
   month: string,
 ): Promise<BriefingResponse> {
   return postJson("/api/briefing", { country, month });
+}
+
+export interface CrisisAppealRequest {
+  country: string;
+  people: number;
+  days: number;
+  verdict: string;
+  /** Blood group -> donors to recruit, most urgent first. */
+  donors: Record<string, number>;
+  /** Blood group -> e.g. "by Mon 10 Nov". */
+  deadlines: Record<string, string>;
+  organisation?: string;
+  /** under_5 | children | teens | adults -> count, from the typical run. */
+  patients_by_age?: Record<string, number>;
+  /** 0 = first draft; 1, 2, ... = rewrites with fresh wording. */
+  variant?: number;
+}
+
+export interface CrisisAppealResponse {
+  whatsapp: string;
+  sms: string;
+  email_subject: string;
+  email_body: string;
+  /** "gemini" when written by Gemini, "template" otherwise. */
+  source: "gemini" | "template";
+}
+
+export function draftCrisisAppeal(req: CrisisAppealRequest): Promise<CrisisAppealResponse> {
+  return postJson("/api/crisis-appeal", req);
 }
