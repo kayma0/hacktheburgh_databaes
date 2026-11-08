@@ -41,6 +41,7 @@ load_dotenv()
 
 # So the "gemini" / "template" line each Gemini-backed feature logs reaches the terminal.
 logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
 
 app = FastAPI(title="SickleSignal API")
 
@@ -212,20 +213,15 @@ def delete_saved_plan(plan_id: int, user: str = Depends(auth_mod.current_user)):
     return {"deleted": plan_id}
 
 
-MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August",
-          "September", "October", "November", "December")
-
-
 @app.post("/api/briefing", response_model=BriefingResponse)
 def briefing(req: BriefingRequest):
-    """Travel checklist for a charity team. Country and month are checked against known
-    values because they go into a Gemini prompt."""
+    """Trip checklist for a charity team, written for one country and opening with what the
+    UK government currently says about it. The country is checked against known values
+    because it goes into a Gemini prompt."""
     known = {c["country"] for c in hotspots_mod.load_heatmap()["items"]}
     if req.country not in known:
         raise HTTPException(status_code=404, detail=f"No data for country: {req.country}")
-    if req.month not in MONTHS:
-        raise HTTPException(status_code=422, detail="month must be a calendar month name")
-    return get_briefing(req.country, req.month)
+    return get_briefing(req.country)
 
 
 # Serve the built frontend, if present, from the same container.

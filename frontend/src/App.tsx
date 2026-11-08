@@ -43,21 +43,6 @@ import type {
 
 /* ───────────────────────── helpers ───────────────────────── */
 
-const MONTHS = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
-
 // Flow: map -> reservoir (+ crisis test) -> drive plan (+ appeal) -> before you travel.
 // Pages are reached through the buttons on each page, not a nav bar.
 type Page = "hotspots" | "reservoir" | "plan" | "briefing";
@@ -2318,7 +2303,6 @@ function TravelBriefPage({
 }) {
   const q0 = useMemo(readPlanQuery, []);
   const c = q0.get("c") || country;
-  const [month, setMonth] = useState(MONTHS[new Date().getMonth()]);
   const [brief, setBrief] = useState<BriefingResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -2326,18 +2310,19 @@ function TravelBriefPage({
     if (c) onCountry(c);
   }, [c]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Built from the country alone, so the page needs nothing from the visitor.
   useEffect(() => {
     if (!c) return;
     let live = true;
     setBrief(null);
     setError(null);
-    getBriefing(c, month)
+    getBriefing(c)
       .then((b) => live && setBrief(b))
       .catch((e) => live && setError(String(e)));
     return () => {
       live = false;
     };
-  }, [c, month]);
+  }, [c]);
 
   const shown = brief && brief.country === c ? brief : null;
 
@@ -2346,7 +2331,9 @@ function TravelBriefPage({
       <section className="hero plan-hero">
         <p className="eyebrow">
           Before you travel <span className="dot-sep">·</span>
-          <span className="live">{shown?.fallback_used ? "fixed checklist" : "written by Gemini"}, not verified</span>
+          <span className="live">
+            {shown?.fallback_used ? "fixed checklist" : "written by Gemini"}, not verified
+          </span>
         </p>
         <div className="hero-place">
           A trip checklist for
@@ -2357,6 +2344,47 @@ function TravelBriefPage({
           advice: read your own government's official advice first, and confirm every item with
           the people named beside it.
         </p>
+      </section>
+
+      <section className="panel brief-list checklist">
+        <header className="panel-head">
+          <span className="panel-key">✓</span>
+          <h2>Checklist</h2>
+          {shown?.updated && (
+            <p>
+              Current situation from{" "}
+              <a href={shown.sources[0]} target="_blank" rel="noopener noreferrer">
+                gov.uk travel advice ↗
+              </a>{" "}
+              <span className="dot-sep">·</span> updated {shown.updated}
+            </p>
+          )}
+        </header>
+        {error && <div className="alert">Couldn't load the checklist: {error}</div>}
+        {!shown && !error && <p className="fine">Loading…</p>}
+        {shown?.sections.map((sec, i) => (
+          <details key={sec.title} open={i === 0} className="brief-sec">
+            <summary>{sec.title}</summary>
+            <ul>
+              {sec.items.map((it, j) => (
+                <li key={j}>
+                  {it.text}
+                  <span className="verify">verify with {it.verify_with}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        ))}
+        {shown && (
+          <p className="plan-fine">
+            {shown.fallback_used
+              ? "This is a fixed starter list (no Gemini answer was available). "
+              : "Written by Gemini for this country, so it can be wrong or out of date. "}
+            {shown.grounded
+              ? "The current situation is drawn from the UK government's published advice, which is written for British passport holders; if your team holds other passports, check your own government's advice too."
+              : "No government advice could be loaded for this country, so check the links below yourself."}
+          </p>
+        )}
       </section>
 
       <section className="panel brief-official">
@@ -2379,51 +2407,6 @@ function TravelBriefPage({
           Run the drive through {c || "the country"}'s licensed national blood service. Donation
           must be voluntary and unpaid.
         </p>
-      </section>
-
-      <section className="panel brief-list checklist">
-        <header className="panel-head">
-          <span className="panel-key">✓</span>
-          <h2>Checklist</h2>
-          <label className="brief-month no-print">
-            <span>Travelling in</span>
-            <span className="select-wrap select-sm">
-              <select value={month} onChange={(e) => setMonth(e.target.value)}>
-                {MONTHS.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </span>
-          </label>
-        </header>
-        {error && <div className="alert">Couldn't load the checklist: {error}</div>}
-        {!shown && !error && <p className="fine">Loading…</p>}
-        {shown?.sections.map((sec, i) => (
-          <details key={sec.title} open={i === 0} className="brief-sec">
-            <summary>{sec.title}</summary>
-            <ul>
-              {sec.items.map((it, j) => (
-                <li key={j}>
-                  {it.text}
-                  <span className="verify">
-                    <i className={`conf conf-${it.confidence}`}>{it.confidence}</i> verify with{" "}
-                    {it.verify_with}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </details>
-        ))}
-        {shown && (
-          <p className="plan-fine">
-            {shown.fallback_used
-              ? "This is a fixed starter list (no Gemini answer was available). "
-              : "Written by Gemini without live sources, so it can be wrong or out of date. "}
-            Confidence is the writer's own guess.
-          </p>
-        )}
       </section>
 
       <div className="hero-actions plan-actions no-print">
