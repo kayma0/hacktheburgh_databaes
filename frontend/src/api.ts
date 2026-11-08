@@ -423,8 +423,6 @@ export async function getSensitivity(i: PlanInputs): Promise<SensitivityResponse
 
 export interface BriefingItem {
   text: string;
-  confidence: string;
-  verify_with: string;
 }
 
 export interface BriefingSection {
@@ -434,9 +432,11 @@ export interface BriefingSection {
 
 export interface BriefingResponse {
   country: string;
-  month: string;
+  /** True when UK government advice was loaded for this country. */
   grounded: boolean;
   sources: string[];
+  /** Date gov.uk last updated its advice, YYYY-MM-DD. */
+  updated: string | null;
   sections: BriefingSection[];
   fallback_used: boolean;
 }
@@ -463,11 +463,8 @@ export async function getHotspots(): Promise<HotspotsResponse> {
   return res.json();
 }
 
-export function getBriefing(
-  country: string,
-  month: string,
-): Promise<BriefingResponse> {
-  return postJson("/api/briefing", { country, month });
+export function getBriefing(country: string): Promise<BriefingResponse> {
+  return postJson("/api/briefing", { country });
 }
 
 export interface CrisisAppealRequest {

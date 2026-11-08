@@ -370,13 +370,10 @@ class SavedPlan(BaseModel):
 
 class BriefingRequest(BaseModel):
     country: str
-    month: str
 
 
 class BriefingItem(BaseModel):
     text: str
-    confidence: str = Field(description="low | medium | high")
-    verify_with: str
 
 
 class BriefingSection(BaseModel):
@@ -386,8 +383,8 @@ class BriefingSection(BaseModel):
 
 class BriefingResponse(BaseModel):
     country: str
-    month: str
-    grounded: bool
+    grounded: bool = Field(description="True when UK government advice was loaded for this country")
     sources: list[str] = []
+    updated: str | None = Field(None, description="Date gov.uk last updated its advice, YYYY-MM-DD")
     sections: list[BriefingSection]
     fallback_used: bool = False

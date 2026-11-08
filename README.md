@@ -6,7 +6,7 @@ ranges (P10/P50/P90) — see [docs/METHOD.md](docs/METHOD.md) for sources and as
 
 Not a medical device. No clinical advice. Aggregate data only.
 
-##Live demo
+## Live demo
 
 You can access our live demo until 7.12.2026:
 https://hacktheburghdatabaes-production.up.railway.app/
@@ -31,8 +31,15 @@ SickleSignal follows a charity team from "where is the need?" to "what do we ask
    the reply must say donation is voluntary and unpaid and may not contain a number it wasn't
    given, and a fixed template is used if Gemini is missing, slow or breaks a rule. The app
    only writes text: it never sends a message and never stores donor details.
-5. **Before you travel** (`POST /api/briefing`). A starter checklist for a visiting team
-   (Gemini, or a fixed list), with official government travel advice linked first.
+5. **Before you travel** (`POST /api/briefing`, `backend/app/briefing.py`). A trip checklist
+   written by Gemini for the country in question. It opens with a "Current situation" section
+   built from the UK government's live advice, which `backend/app/travel_advice.py` fetches
+   from the free gov.uk Content API: the advisory status, the date gov.uk last changed the
+   page, and the safety and regional-risk text. Gemini is never asked what the advice is, so
+   it cannot invent an advisory, and if Gemini is unavailable the gov.uk facts still lead a
+   fixed starter list. Built from the country alone, with no user input. Entry and visa rules
+   are kept general on purpose: FCDO advice is written for British passport holders and we do
+   not know a visitor's nationality.
 6. **Saved plans.** Sign in with Auth0 to keep plans in your account; without Auth0 they stay
    in the browser.
 

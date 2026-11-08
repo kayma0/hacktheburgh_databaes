@@ -1102,33 +1102,10 @@ input[type="range"]:focus-visible {
 .checklist li {
   margin-bottom: 8px;
 }
-.verify {
-  display: block;
-  font-size: 12px;
+.brief-source {
+  margin: 0 0 10px;
+  font-size: 12.5px;
   color: var(--ink-soft);
-  margin-top: 2px;
-}
-.conf {
-  font-style: normal;
-  font-family: var(--mono);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  padding: 1px 6px;
-  border-radius: 999px;
-  margin-right: 4px;
-}
-.conf-high {
-  background: var(--oxblood);
-  color: var(--paper);
-}
-.conf-medium {
-  background: var(--rose);
-  color: var(--paper);
-}
-.conf-low {
-  background: var(--paper-2);
-  color: var(--ink);
 }
 
 .chat {
@@ -3174,11 +3151,10 @@ input[type="range"]:focus-visible {
   color: var(--firebrick);
 }
 @media print {
+  /* Sections are opened by script before printing: a closed <details> cannot be
+     un-hidden from CSS. */
   .brief-list details {
     break-inside: avoid;
-  }
-  .brief-list details > ul {
-    display: block;
   }
   .brief-links a {
     color: #000;
