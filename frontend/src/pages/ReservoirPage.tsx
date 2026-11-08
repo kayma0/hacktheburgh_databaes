@@ -94,7 +94,7 @@ export default function ReservoirPage({
 
       <p className="target-note">
         Full bag = <b>{fmtDays(target)}-day</b> target{" "}
-        {r && <SourceTag assumed={r.target_is_assumption} title={r.target_source} />}
+        {r && !r.target_is_assumption && <SourceTag assumed={false} title={r.target_source} />}
       </p>
 
       <CrisisSimulator key={country} initial={initial} onScenario={setScenario} />

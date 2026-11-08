@@ -207,7 +207,7 @@ export default function PlanPage({
                     {a.label}
                     {a.value !== null && <b> {PERCENT_KEYS.has(a.key) ? pct(a.value) : fmtRate(a.value)}</b>}
                   </span>
-                  {a.is_assumption ? <span aria-hidden /> : <SourceTag assumed={false} title={a.source} />}
+                  <SourceTag assumed={a.is_assumption} title={a.source} />
                   <small>{a.source}</small>
                 </li>
               ))}

@@ -1860,7 +1860,7 @@ input[type="range"]:focus-visible {
 }
 .plan-assume-list li {
   display: grid;
-  grid-template-columns: minmax(220px, 1.2fr) 96px 2fr;
+  grid-template-columns: minmax(220px, 1.2fr) 124px 2fr;
   gap: 12px;
   align-items: baseline;
   padding: 9px 0;
@@ -2346,4 +2346,15 @@ input[type="range"]:focus-visible {
   .who-org {
     display: none;
   }
+}
+
+/* Tag pills in "What this rests on": hug their text with even padding, left-aligned in their
+   column, instead of stretching across it. */
+.plan-assume-list .src-tag {
+  justify-self: start;
+  align-self: center;
+  padding: 4px 13px;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
 }
