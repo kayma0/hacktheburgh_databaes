@@ -346,3 +346,6 @@ The donor-registry tests need a scratch Postgres (they add rows), and are skippe
 locally generated key pair, so they need no Auth0 account; they check that forged, expired,
 wrong-audience and wrong-issuer tokens are refused. Frontend: `cd frontend && npx tsc --noEmit
 && npm run build`.
+
+
+## Winner of Best Use of Gemini Api
